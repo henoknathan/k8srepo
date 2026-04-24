@@ -78,3 +78,5 @@ resource "aws_security_group" "efs_sg" {
     cidr_blocks = [module.vpc.vpc_cidr_block] # Restricts access to your VPC only
   }
 }
+resource "aws_ecr_repository" "frontend" { name = "frontend-repo" }
+resource "aws_ecr_repository" "backend" { name = "backend-repo" }

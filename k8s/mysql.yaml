@@ -1,0 +1,54 @@
+# 1. MySQL Service (Internal Entry Point)
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+spec:
+  ports:
+  - port: 3306
+  selector:
+    app: mysql
+---
+# 2. MySQL Deployment (The Database Engine)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "password123" # Use a Secret in production!
+        - name: MYSQL_DATABASE
+          value: "enterprise_db"
+        ports:
+        - containerPort: 3306
+        
+        # FIX: Added resources to prevent Noisy Neighbor issues
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+            
+        # FIX: Connects the DB files to AWS EFS storage
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: efs-claim # This MUST match the name in your storage.yaml
+

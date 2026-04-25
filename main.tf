@@ -78,5 +78,62 @@ resource "aws_security_group" "efs_sg" {
     cidr_blocks = [module.vpc.vpc_cidr_block] # Restricts access to your VPC only
   }
 }
+provider "helm" {
+  kubernetes = { # Add the '=' here
+    host                   = module.eks.cluster_endpoint
+    cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+    exec = { # Add the '=' here
+      api_version = "client.authentication.k8s.io/v1beta1"
+      args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+      command     = "aws"
+    }
+  }
+}
+
+resource "helm_release" "aws_lb_controller" {
+  name       = "aws-load-balancer-controller"
+  repository = "https://aws.github.io/eks-charts"
+  chart      = "aws-load-balancer-controller"
+  namespace  = "kube-system"
+
+  # We use a single 'values' list with a YAML string
+  values = [
+    <<-EOT
+    clusterName: ${module.eks.cluster_name}
+    serviceAccount:
+      create: true
+      name: aws-load-balancer-controller
+      annotations:
+        ://amazonaws.com: ${module.lb_role.iam_role_arn}
+    EOT
+  ]
+}
+
+
+provider "kubernetes" {
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+    command     = "aws"
+  }
+}
+module "lb_role" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name                              = "eks-lb-controller-role" # Use 'name' if this still fails
+  attach_load_balancer_controller_policy = true
+
+  oidc_providers = {
+    main = {
+      provider_arn               = module.eks.oidc_provider_arn
+      namespace_service_accounts = ["kube-system:aws-load-balancer-controller"]
+    }
+  }
+}
+
+
 resource "aws_ecr_repository" "frontend" { name = "frontend-repo" }
 resource "aws_ecr_repository" "backend" { name = "backend-repo" }

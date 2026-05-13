@@ -1,25 +1,24 @@
-# 1. EFS StorageClass (The Blueprint)
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
+apiVersion: v1
+kind: PersistentVolume
 metadata:
-  name: efs-sc
-provisioner: efs.csi.aws.com
-parameters:
-  provisioningMode: efs-ap
-  fileSystemId: fs-XXXXXXXXXXXXX # Replace with your EFS ID
-  directoryPerms: "700"
-
+  name: mysql-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  # CHANGED: Replaced AWS EFS with a simple, free local folder inside the VM
+  hostPath:
+    path: "/data/mysql"
 ---
-# 2. PersistentVolumeClaim (The Storage Request)
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: efs-claim
-  # Important: This MUST be in the same namespace as your MySQL deployment
+  name: mysql-pvc
 spec:
   accessModes:
-    - ReadWriteMany # Allows multiple pods to access the storage
-  storageClassName: efs-sc
+    - ReadWriteOnce
   resources:
     requests:
-      storage: 5Gi # Required field, but EFS scales automatically
+      storage: 1Gi

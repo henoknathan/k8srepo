@@ -3,13 +3,12 @@ kind: Ingress
 metadata:
   name: multi-tier-ingress
   annotations:
-    # Critical: Tells the controller to build an ALB
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/target-type: ip
-    # Optional: Groups your Route53 name here
-    alb.ingress.kubernetes.io/load-balancer-name: enterprise-alb
+    # REMOVED: AWS ALB specific annotations
+    # ADDED: Nginx configuration to cleanly handle the routing paths
+    nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
-  ingressClassName: alb
+  # CHANGED: Switch from 'alb' to the standard local free ingress controller
+  ingressClassName: nginx 
   rules:
   - http:
       paths:
@@ -27,3 +26,5 @@ spec:
             name: frontend-service
             port:
               number: 80
+              
+

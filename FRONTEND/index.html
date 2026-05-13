@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head><title>Enterprise App</title></head>
+<body>
+    <h1>Frontend running on Nginx</h1>
+    <div id="backend-data">Loading from backend...</div>
+    <script>
+        // We will point this to our Kubernetes Service later
+        fetch('/api/data')
+            .then(response => response.json())
+            .then(data => document.getElementById('backend-data').innerText = data.message);
+    </script>
+</body>
+</html>

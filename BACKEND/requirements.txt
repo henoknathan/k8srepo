@@ -1,0 +1,12 @@
+# --- Web Framework ---
+# Flask is the micro-framework used to build the API endpoints.
+Flask==3.0.0
+
+# --- Database Driver ---
+# This allows Python to communicate with your MySQL database.
+mysql-connector-python==8.2.0
+
+# --- Production Server ---
+# Gunicorn is a production-grade WSGI server. 
+# It handles multiple requests much better than the built-in Flask server.
+gunicorn==21.2.0

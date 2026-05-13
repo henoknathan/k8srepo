@@ -4,6 +4,7 @@ import mysql.connector
 app = Flask(__name__)
 
 def get_db_connection():
+    
     # 'mysql' is the DNS name provided by the Kubernetes service
     return mysql.connector.connect(
         host="mysql",

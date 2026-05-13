@@ -41,25 +41,25 @@ pipeline {
             }
         }
         
-               stage('Deploy & Rollout Verification') {
+        stage('Deploy & Rollout Verification') {
             steps {
                 script {
-                    // 1. Update the image tags inside the AWS-INFRA directory
-                    // Using AWS-INFRA/*.yaml ensures it scans all manifest files inside that folder
-                    sh "sed -i 's|image: \".*backend.*\"|image: \"${REGISTRY}/backend-repo:${IMAGE_TAG}\"|g' AWS-INFRA/*.yaml"
-                    sh "sed -i 's|image: \".*frontend.*\"|image: \"${REGISTRY}/frontend-repo:${IMAGE_TAG}\"|g' AWS-INFRA/*.yaml"
+                    // NEW: Dynamically update your YAML manifests with the unique build tag 
+                    // This forces Kubernetes to notice the change and start a rolling update
+                    sh "sed -i 's|image: \".*backend.*\"|image: \"${REGISTRY}/backend-repo:${IMAGE_TAG}\"|g' k8s/deployment.yaml"
+                    sh "sed -i 's|image: \".*frontend.*\"|image: \"${REGISTRY}/frontend-repo:${IMAGE_TAG}\"|g' k8s/deployment.yaml"
                     
-                    // 2. Apply all manifests inside the AWS-INFRA folder
-                    sh "kubectl apply -f AWS-INFRA/"
+                    // Deploys your combined manifests
+                    sh "kubectl apply -f k8s/"
                     
-                    // 3. Monitor rollout to ensure zero-downtime success
+                    // NEW: Pauses pipeline until Kubernetes verifies the new pods are fully healthy 
+                    // If the new pods crash or fail their health probes, this fails the pipeline and protects uptime
                     echo "Verifying zero-downtime rollout..."
                     sh "kubectl rollout status deployment/backend --timeout=120s"
                     sh "kubectl rollout status deployment/frontend --timeout=120s"
                 }
             }
         }
-
     }
 
     post {

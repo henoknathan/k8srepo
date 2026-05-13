@@ -1,0 +1,25 @@
+# 1. EFS StorageClass (The Blueprint)
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: efs-sc
+provisioner: efs.csi.aws.com
+parameters:
+  provisioningMode: efs-ap
+  fileSystemId: fs-XXXXXXXXXXXXX # Replace with your EFS ID
+  directoryPerms: "700"
+
+---
+# 2. PersistentVolumeClaim (The Storage Request)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: efs-claim
+  # Important: This MUST be in the same namespace as your MySQL deployment
+spec:
+  accessModes:
+    - ReadWriteMany # Allows multiple pods to access the storage
+  storageClassName: efs-sc
+  resources:
+    requests:
+      storage: 5Gi # Required field, but EFS scales automatically

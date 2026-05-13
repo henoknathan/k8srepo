@@ -1,0 +1,151 @@
+# 1. THE SECRET (Keep this separate or use AWS Secrets Manager in real prod)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret
+type: Opaque
+data:
+  db-user: dXNlcg== # Example base64
+  db-password: cGFzc3dvcmQ= # Example base64
+
+---
+# 2. BACKEND DEPLOYMENT (Optimized for Scaling)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1       # Spin up 1 new pod before killing an old one
+      maxUnavailable: 0 # Ensure no downtime during updates
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+      - name: backend
+        image: "://amazonaws.com"
+        ports:
+        - containerPort: 5000
+        env:
+        - name: DB_HOST
+          value: "mysql-service"
+        - name: DB_NAME
+          value: "shopflow_db"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-secret
+              key: db-user
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secret
+              key: db-password
+        # ADDED: Health Checks (Crucial for HPA to know pod is actually working)
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi" # Increased memory slightly for Python apps
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+
+---
+# 3. BACKEND SERVICE
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+spec:
+  selector:
+    app: backend
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+
+---
+# 4. FRONTEND DEPLOYMENT
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: "://amazonaws.com"
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
+
+---
+# 5. FRONTEND SERVICE (AWS Load Balancer)
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  annotations:
+    # Forces AWS to use the newer Network Load Balancer (Better Performance)
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+spec:
+  type: LoadBalancer 
+  selector:
+    app: frontend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+
+---
+# 6. AUTO-SCALING (The HPA Pattern)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: app-autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60 # Scales up if CPU average hits 60%
+

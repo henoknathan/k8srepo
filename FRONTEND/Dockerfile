@@ -1,27 +1,31 @@
-# Stage 1: Build the React application
-FROM node:18-alpine AS builder
+# ... (Your previous base image setup, e.g., FROM node:alpine)
+# STAGE 1: Build the static application files
+FROM node:18-alpine AS build
 WORKDIR /app
 
-# Cache dependencies: Copy only package files first
+# Copy dependency mappings
 COPY package*.json ./
-RUN npm ci --only=production
 
-# Copy source and build
+# Execute production install with standard fallback tracking
+RUN npm ci --omit=dev || npm install --production
+
+# Copy remaining static web assets
 COPY . .
-RUN npm run build
 
-# Stage 2: Serve the static files with Nginx
-FROM nginx:stable-alpine
+# STAGE 2: Serve the files using your Nginx configuration
+FROM nginx:alpine
+COPY --from=build /app /usr/share/nginx/html
 
-# Copy the custom nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+WORKDIR /app
 
-# Copy the build output from the builder stage to Nginx's public folder
-# Note: 'build' is the default for Create React App; use 'dist' for Vite
-COPY --from=builder /app/build /usr/share/nginx/html
+# 1. Copy package files (Using a wildcard allows it to build even if lock file is missing)
+COPY package*.json ./
 
-# Expose port 80 for the Load Balancer
-EXPOSE 80
+# 2. CHANGED: Swapped deprecated flag for the modern production install flag
+RUN npm ci --omit=dev || npm install --production
 
-CMD ["nginx", "-g", "daemon off;"]
+# 3. Copy the rest of your frontend source files
+COPY . .
+
+# ... (The rest of your Nginx build/copy steps)
 

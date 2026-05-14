@@ -17,26 +17,32 @@ pipeline {
         stage('Build & Push') {
             steps {
                 script {
-                    sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${REGISTRY}"
-                    
-                    parallel(
-                        "Frontend": {
-                            script {
-                                // NEW: Builds with the unique build tag and pushes both tags
-                                def frontendImg = docker.build("${REGISTRY}/frontend-repo:${IMAGE_TAG}", "./FRONTEND")
-                                frontendImg.push()
-                                frontendImg.push('latest')
+                    // Securely bind credentials to pass to the AWS CLI tools
+                    withCredentials([[
+                        $class: 'UsernamePasswordMultiBinding', 
+                        credentialsId: 'aws-eks-creds', 
+                        usernameVariable: 'AWS_ACCESS_KEY_ID', 
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    ]]) {
+                        sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${REGISTRY}"
+                        
+                        parallel(
+                            "Frontend": {
+                                script {
+                                    def frontendImg = docker.build("${REGISTRY}/frontend-repo:${IMAGE_TAG}", "./FRONTEND")
+                                    frontendImg.push()
+                                    frontendImg.push('latest')
+                                }
+                            },
+                            "Backend": {
+                                script {
+                                    def backendImg = docker.build("${REGISTRY}/backend-repo:${IMAGE_TAG}", "./BACKEND")
+                                    backendImg.push()
+                                    backendImg.push('latest')
+                                }
                             }
-                        },
-                        "Backend": {
-                            script {
-                                // NEW: Builds with the unique build tag and pushes both tags
-                                def backendImg = docker.build("${REGISTRY}/backend-repo:${IMAGE_TAG}", "./BACKEND")
-                                backendImg.push()
-                                backendImg.push('latest')
-                            }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -44,23 +50,30 @@ pipeline {
         stage('Deploy & Rollout Verification') {
             steps {
                 script {
-                    // NEW: Dynamically update your YAML manifests with the unique build tag 
-                    // This forces Kubernetes to notice the change and start a rolling update
-                    sh "sed -i 's|image: \".*backend.*\"|image: \"${REGISTRY}/backend-repo:${IMAGE_TAG}\"|g' k8s/deployment.yaml"
-                    sh "sed -i 's|image: \".*frontend.*\"|image: \"${REGISTRY}/frontend-repo:${IMAGE_TAG}\"|g' k8s/deployment.yaml"
-                    
-                    // Deploys your combined manifests
-                    sh "kubectl apply -f k8s/"
-                    
-                    // NEW: Pauses pipeline until Kubernetes verifies the new pods are fully healthy 
-                    // If the new pods crash or fail their health probes, this fails the pipeline and protects uptime
-                    echo "Verifying zero-downtime rollout..."
-                    sh "kubectl rollout status deployment/backend --timeout=120s"
-                    sh "kubectl rollout status deployment/frontend --timeout=120s"
+                    withCredentials([[
+                        $class: 'UsernamePasswordMultiBinding', 
+                        credentialsId: 'aws-eks-creds', 
+                        usernameVariable: 'AWS_ACCESS_KEY_ID', 
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    ]]) {
+                        // 1. Refresh Kubeconfig profile for the jenkins workspace execution context
+                        sh "aws eks update-kubeconfig --name shopflow-k8s --region ${AWS_REGION}"
+
+                        // 2. Dynamic sed substitution matching your image placeholders
+                        sh "sed -i 's|image: \".*backend.*\"|image: \"${REGISTRY}/backend-repo:${IMAGE_TAG}\"|g' k8s/deployment.yaml"
+                        sh "sed -i 's|image: \".*frontend.*\"|image: \"${REGISTRY}/frontend-repo:${IMAGE_TAG}\"|g' k8s/deployment.yaml"
+                        
+                        // 3. Execution apply command against EKS Cluster Plane
+                        sh "kubectl apply -f k8s/"
+                        
+                        echo "Verifying zero-downtime rollout..."
+                        sh "kubectl rollout status deployment/backend --timeout=120s"
+                        sh "kubectl rollout status deployment/frontend --timeout=120s"
+                    }
                 }
             }
         }
-    }
+
 
     post {
         always {

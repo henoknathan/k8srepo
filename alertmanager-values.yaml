@@ -1,0 +1,9 @@
+alertmanager:
+  config:
+    route:
+      receiver: 'slack-notifications'
+    receivers:
+    - name: 'slack-notifications'
+      slack_configs:
+      - api_url: 'slack.com' # <-- Replace with your Slack Webhook URL
+        channel: '#devops-alerts'

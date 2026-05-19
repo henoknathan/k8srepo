@@ -1,27 +1,15 @@
-# Stage 1: Build the React application
-FROM node:18-alpine AS builder
+# Stage 1: Build assets
+FROM node:20-alpine AS builder
 WORKDIR /app
-
-# Cache dependencies: Copy only package files first
 COPY package*.json ./
-RUN npm ci --only=production
-
-# Copy source and build
+RUN npm ci
 COPY . .
 RUN npm run build
 
-# Stage 2: Serve the static files with Nginx
-FROM nginx:stable-alpine
-
-# Copy the custom nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copy the build output from the builder stage to Nginx's public folder
-# Note: 'build' is the default for Create React App; use 'dist' for Vite
-COPY --from=builder /app/build /usr/share/nginx/html
-
-# Expose port 80 for the Load Balancer
+# Stage 2: Production serving via Nginx
+FROM nginx:1.25-alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
 EXPOSE 80
-
 CMD ["nginx", "-g", "daemon off;"]
 

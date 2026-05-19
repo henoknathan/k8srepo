@@ -1,0 +1,63 @@
+#Part 1: Kubernetes Network PoliciesBy default, all pods in Kubernetes can talk to 
+#all other pods. To secure your enterprise app, we will enforce a Least Privilege model 
+#using a dedicated file: k8s/network-policy.yaml.This configuration prevents attackers 
+#from hitting your database or backend directly from the outside world.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-policy
+  namespace: lab-shopflow
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - ipBlock:
+        cidr: 0.0.0.0/0 # Allow the AWS Load Balancer to send internet traffic to the frontend
+    ports:
+    - protocol: TCP
+      port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-policy
+  namespace: lab-shopflow
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: frontend # Strictly limit ingress: only allow traffic originating from the Frontend pods
+    ports:
+    - protocol: TCP
+      port: 5000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: database-policy
+  namespace: lab-shopflow
+spec:
+  podSelector:
+    matchLabels:
+      app: mysql # Assuming your MySQL database pod uses this label
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: backend # Strict isolation: only the Backend pods are allowed to query the database
+    ports:
+    - protocol: TCP
+      port: 3306

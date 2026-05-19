@@ -1,0 +1,32 @@
+# 6. AUTO-SCALING (The HPA Pattern with Anti-Flapping Behavior)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: app-autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60 # Scales up if CPU average hits 60%
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0  # Scale up immediately when traffic spikes
+      policies:
+      - type: Pods
+        value: 100                   # Double the pod count if necessary
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300 # Prevent flapping: Wait 5 mins before killing pods
+      policies:
+      - type: Pods
+        value: 10                    # Scale down gradually (max 10% of pods at a time)
+        periodSeconds: 60

@@ -21,13 +21,6 @@ The infrastructure lifecycle is entirely automated and separated into logical op
     ▼ (Shared Storage)             ▼
 [ AWS EFS StorageClass ]     [ MySQL StatefulSet ]
 ```
-mermaid
-graph TD
-    classDef cl fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef ax fill:#f90,stroke:#333,color:#fff;
-    classDef k8 fill:#326ce5,stroke:#333,color:#fff;
-    classDef db fill:#00758f,stroke:#333,color:#fff;
-
     User([User]) :::cl
     
     subgraph AWS [AWS Cloud (via Terraform)]

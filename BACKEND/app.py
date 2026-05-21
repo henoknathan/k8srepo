@@ -34,12 +34,12 @@ if __name__ == "__main__":
     # Standard container binding: Listens on all interfaces on containerPort 5000
     app.run(host='0.0.0.0', port=5000)
 
-================================================================================
+#================================================================================
 #PRODUCTION NETWORK ARCHITECTURE: END-TO-END TRAFFIC FLOW NOTES
-================================================================================
+#================================================================================
 
 #[STEP 1: THE CLIENT LAYER (THE BROWSER)]
---------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------
 # Action: 
 #   A user inputs http://<LoadBalancer-URL>/api/data into their web browser.
 #
@@ -55,7 +55,7 @@ if __name__ == "__main__":
 
 
 #[STEP 2: THE ENTRY LAYER (LOAD BALANCER & REVERSE PROXY)]
---------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------
 # Action: 
 #   The Load Balancer routes the incoming packet into the private cloud network,
 #   handing it off directly to an available Nginx reverse proxy instance.
@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
 
 #[STEP 3: THE APPLICATION LAYER (FLASK API)]
---------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------
 # Action: 
 #   The private internal network routes the stripped traffic directly into an
 #   active, isolated Flask application container.
@@ -96,7 +96,7 @@ if __name__ == "__main__":
 
 
 #[STEP 4: THE DATA & STORAGE LAYER (MYSQL & AMAZON EFS)]
---------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------
 # Action: 
 #   Flask securely pulls data records from the MySQL instance and interacts 
 #   with persistent system files located on a shared network drive.
@@ -140,6 +140,6 @@ if __name__ == "__main__":
 #     types to minimize response payload size, reducing cloud data egress costs
 #     and improving browser rendering speeds.
 
-================================================================================
+#================================================================================
 #SUMMARY: A robust, highly scalable, and horizontally sound cloud topology.
-================================================================================
+#================================================================================

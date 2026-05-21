@@ -23,39 +23,46 @@ The infrastructure lifecycle is entirely automated and separated into logical op
 ```
 ```mermaid
 graph TD
-    %% Define Styles
-    classDef client fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef aws fill:#ff9900,stroke:#333,stroke-width:1px,color:#fff;
-    classDef k8s fill:#326ce5,stroke:#333,stroke-width:1px,color:#fff;
-    classDef db fill:#00758f,stroke:#333,stroke-width:1px,color:#fff;
+    classDef cl fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef ax fill:#f90,stroke:#333,color:#fff;
+    classDef k8 fill:#326ce5,stroke:#333,color:#fff;
+    classDef db fill:#00758f,stroke:#333,color:#fff;
 
-    %% Components
-    User([🌐 Public Web User]) :::client
+    User([User]) :::cl
     
-    subgraph AWS_Cloud [AWS Cloud Infrastructure (Provisioned via Terraform)]
-        ALB[🔀 AWS Application Load Balancer] :::aws
-        ECR[(📦 Amazon ECR Image Registry)] :::aws
-        EFS[(💾 Amazon EFS Shared Storage)] :::aws
+    subgraph AWS [AWS Cloud (via Terraform)]
+        ALB[🔀 AWS ALB] :::ax
+        ECR[(📦 ECR Registry)] :::ax
+        EFS[(💾 EFS Storage)] :::ax
         
-        subgraph EKS_Cluster [Amazon EKS Cluster]
-            Argo[🐙 ArgoCD GitOps Engine] :::k8s
-            Ingress[⚡ ALB Ingress Controller] :::k8s
-            HPA[📈 Horizontal Pod Autoscaler] :::k8s
+        subgraph EKS [Amazon EKS Cluster]
+            Argo[🐙 ArgoCD Engine] :::k8
+            Ingress[⚡ ALB Controller] :::k8
+            HPA[📈 HPA Scaler] :::k8
             
-            subgraph Namespace_App [Application Namespace]
-                Frontend[🎨 Frontend Pods <br> Nginx SPA] :::k8s
-                Backend[⚙️ Backend Pods <br> Python REST API] :::k8s
-                MySQL[(🛢️ MySQL StatefulSet)] :::db
-                NetPol{🛡️ Network Policy} :::k8s
+            subgraph AppNS [App Namespace]
+                Frontend[🎨 Frontend Nginx] :::k8
+                Backend[⚙️ Backend Python] :::k8
+                MySQL[(🛢️ MySQL DB)] :::db
+                NetPol{🛡️ Net Policy} :::k8
             end
             
-            subgraph Namespace_Monitoring [Monitoring Namespace]
-                Prom[🔥 Prometheus Metrics] :::k8s
-                Graf[📊 Grafana Dashboards] :::k8s
+            subgraph MonNS [Mon Namespace]
+                Prom[🔥 Prometheus] :::k8
+                Graf[📊 Grafana] :::k8
             end
         end
     end
 
+    User --> ALB --> Ingress --> Frontend --> Backend
+    Frontend -.-> EFS
+    Backend --> NetPol --> MySQL
+    Argo --> AppNS
+    ECR --> Frontend & Backend
+    Prom --> Backend
+    Graf --> Prom
+    HPA --> Backend
+```
     %% Data Flows and Connections
     User -->|HTTP/HTTPS Traffic| ALB
     ALB -->|Routes Requests| Ingress

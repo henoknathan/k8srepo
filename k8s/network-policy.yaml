@@ -1,8 +1,35 @@
-#Part 1: Kubernetes Network PoliciesBy default, all pods in Kubernetes can talk to 
-#all other pods. To secure your enterprise app, we will enforce a Least Privilege model 
-#using a dedicated file: k8s/network-policy.yaml.This configuration prevents attackers 
-#from hitting your database or backend directly from the outside world.
+#The Migration Job Block Failure: In Stage 7 of your Jenkinsfile, you configured an isolated Kubernetes 
+#database migration engine (job/shopflow-db-migration-${BUILD_NUMBER}). This job runs a standalone pod 
+#with a custom label (typically matching job-name). Because your database-policy strictly blocks everything 
+#except app: backend, your database migrations will be blocked and time out. 
+#e must update the policy to explicitly allow the migration job pods to pass through the database firewall.
+#The Frontend Egress/Ingress Rule: Your frontend uses Nginx as a reverse proxy, making calls directly to the 
+#backend. Because your backend-policy permits traffic coming from app: frontend on port 5000, 
+#it aligns perfectly with your Flask container mapping.
 
+# ==============================================================================
+# KEY ARCHITECTURAL UPDATES & MAINTENANCE DOCUMENTATION
+# ==============================================================================
+
+# 1. THE DYNAMIC MIGRATION ACCESS GATEWAY:
+#    - Rule added: 'matchExpressions: ... operator: Exists' inside the database policy.
+#    - Purpose: Since your database migration jobs change their tracking name on every run
+#      (e.g., shopflow-db-migration-42), a standard static label lookup will fail.
+#    - Functionality: Instructing Kubernetes to look for the presence of the system-injected
+#      'job-name' key allows any legitimate cluster job pod to securely connect and apply
+#      schema modifications without breaking your strict database firewall rules.
+#
+# 2. WHERE DOES THIS FILE GO?
+#    - Repository Storage Path: Save this combined layout as 'k8s/network-policy.yaml'.
+#    - Pipeline Execution Connection: The unified deployment step 'kubectl apply -f k8s/' in
+#      Stage 8 of your master Jenkinsfile will automatically catch, process, and activate
+#      these security parameters on your EKS cluster nodes concurrently.
+#
+# ==============================================================================
+
+# ==============================================================================
+# 1. FRONTEND NETWORK POLICY (Internet Traffic Entry Point)
+# ==============================================================================
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -11,17 +38,20 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: frontend
+      app: frontend             # Secures your Nginx web client containers
   policyTypes:
   - Ingress
   ingress:
   - from:
     - ipBlock:
-        cidr: 0.0.0.0/0 # Allow the AWS Load Balancer to send internet traffic to the frontend
+        cidr: 0.0.0.0/0         # Allows public internet and AWS Load Balancers to reach the UI
     ports:
     - protocol: TCP
-      port: 80
+      port: 80                  # Matches your Nginx web protocol port
 ---
+# ==============================================================================
+# 2. BACKEND NETWORK POLICY (Isolated App Tier)
+# ==============================================================================
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -30,18 +60,21 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: backend
+      app: backend              # Secures your Python/Flask API containers
   policyTypes:
   - Ingress
   ingress:
   - from:
     - podSelector:
         matchLabels:
-          app: frontend # Strictly limit ingress: only allow traffic originating from the Frontend pods
+          app: frontend         # Strictly blocks direct external access; traffic must pass through the UI proxy
     ports:
     - protocol: TCP
-      port: 5000
+      port: 5000                # Matches your Flask application network listening containerPort
 ---
+# ==============================================================================
+# 3. DATABASE NETWORK POLICY (Deep Isolation Core)
+# ==============================================================================
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -50,14 +83,23 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app: mysql # Assuming your MySQL database pod uses this label
+      app: mysql                # Secures your MySQL deployment engine pods
   policyTypes:
   - Ingress
   ingress:
   - from:
+    # PERMISSION PATH A: The persistent API application servers
     - podSelector:
         matchLabels:
-          app: backend # Strict isolation: only the Backend pods are allowed to query the database
+          app: backend
+          
+    # PERMISSION PATH B (CRITICAL UPDATE): Dynamic Jenkins DB Migration Engine Job
+    # PURPOSE: Allows the short-lived database update jobs to safely communicate with MySQL
+    - podSelector:
+        matchExpressions:
+          - key: job-name
+            operator: Exists    # Natively detects and authorizes any Kubernetes Job pod running in this space
     ports:
     - protocol: TCP
-      port: 3306
+      port: 3306                # Standard database interface socket engine port
+

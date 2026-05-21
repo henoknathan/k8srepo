@@ -1,0 +1,34 @@
+#Safe Database Migration (Kubernetes Job Pattern)To achieve true zero-downtime, database schema 
+#adjustments must execute as an isolated, short-lived Kubernetes Job before the rolling 
+#update of your application servers takes place. If the schema migration fails, 
+#the pipeline aborts, preventing your production workloads from crashing.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: shopflow-db-migration-${BUILD_NUMBER} # Unique name prevents collisions
+  namespace: lab-shopflow
+spec:
+  ttlSecondsAfterFinished: 300 # Automatically purges logs/job objects after 5 minutes
+  backoffLimit: 1             # Do not retry indefinitely if SQL code contains syntax errors
+  template:
+    spec:
+      containers:
+      - name: migrator
+        image: "TARGET_BACKEND_IMAGE" # Reuses your compiled backend container code
+        command: ["python", "manage.py", "db", "upgrade"] # Update to your specific framework CLI
+        env:
+        - name: DB_HOST
+          value: "mysql-service"
+        - name: DB_NAME
+          value: "shopflow_db"
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-secret
+              key: db-user
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secret
+              key: db-password
+      restartPolicy: Never

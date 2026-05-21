@@ -1,25 +1,24 @@
-# 1. EFS StorageClass (The Blueprint)
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-  name: efs-sc
-provisioner: efs.csi.aws.com
-parameters:
-  provisioningMode: efs-ap
-  fileSystemId: fs-XXXXXXXXXXXXX # Replace with your EFS ID
-  directoryPerms: "700"
+# ==============================================================================
+# AWS EFS STORAGE LAYER ATTACHMENT MANIFEST (k8s/storage.yaml)
+# ==============================================================================
+# PURPOSE & LOGIC:
+# - By explicitly declaring 'namespace: lab-shopflow', it matches your secret, 
+#   deployment, and database namespaces exactly.
+# - This parameter guarantees that your MySQL pod engine will find, authenticate, and 
+#   mount the underlying AWS Elastic File System (EFS) storage drive upon initialization.
+# - This configuration safeguards your database records against loss if a pod restarts.
+# ==============================================================================
 
----
-# 2. PersistentVolumeClaim (The Storage Request)
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: efs-claim
-  # Important: This MUST be in the same namespace as your MySQL deployment
+  namespace: lab-shopflow       # CRITICAL: Bound to your secure workspace to connect with the MySQL engine pod
 spec:
   accessModes:
-    - ReadWriteMany # Allows multiple pods to access the storage
-  storageClassName: efs-sc
+    - ReadWriteMany             # Allows multiple database replicas or application layers to read/write concurrently if scaled
+  storageClassName: efs-sc      # Direct target mapping connecting to your provisioned AWS EFS StorageClass provisioner
   resources:
     requests:
-      storage: 5Gi # Required field, but EFS scales automatically
+      storage: 5Gi              # Dynamically allocates 5 Gigabytes of persistent storage space for your database schemas
+

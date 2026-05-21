@@ -1,293 +1,225 @@
-# EKS Infrastructure Deployment
+# Multi-Tier Enterprise GitOps Platform on AWS EKS
 
-Automates the configuration of AWS Elastic Kubernetes Service (EKS) cluster add-ons by integrating the official AWS EKS Helm charts repository for reliable software deployments.
-
----
-
-## 📖 Introduction for Beginners
-In Kubernetes, an **Ingress Controller** acts like a smart traffic cop for your cluster. Instead of exposing every single internal service to the internet (which is expensive and insecure), an Ingress Controller sets up a single entry point (an AWS Application Load Balancer). It reads your configuration and routes external web traffic safely to the correct applications running inside your cluster.
-
-This repository automates the installation of the **AWS Load Balancer Controller** using Helm, the package manager for Kubernetes.
+A production-ready, highly available multi-tier application architecture deployed on AWS Elastic Kubernetes Service (EKS). This project demonstrates modern Cloud Native and DevOps engineering practices, utilizing **Infrastructure as Code (IaC)**, **GitOps Continuous Delivery**, **Microservices Containerization**, automated **Horizontal Autoscaling**, cloud-native **Persistent Storage**, and robust **Observability stacks**.
 
 ---
 
-## 📋 Prerequisites
+## 🏗️ System Architecture Overview
 
-Before starting, ensure you have the following tools installed and configured on your machine:
-*   **AWS CLI**: The command-line tool to interact with your AWS account. It must be configured with permissions to manage EKS and IAM.
-*   **kubectl**: The standard command-line tool used to send commands to Kubernetes clusters. Your local `kubectl` version should match your EKS cluster version.
-*   **Helm v3+**: Known as the package manager for Kubernetes. It allows you to install, update, and manage pre-packaged Kubernetes applications called "charts".
-*   **eksctl**: A dedicated, official command-line tool built by AWS and Weaveworks specifically for creating and managing infrastructure on EKS easily.
+The infrastructure lifecycle is entirely automated and separated into logical operational layers:
+
+```text
+[ Traffic: Internet ]
+          │
+          ▼
+   [ AWS ALB Ingress ]
+          │
+    ┌─────┴────────────────────────┐
+    ▼                              ▼
+[ Frontend Pods (Nginx) ]   [ Backend Pods (Flask/Python) ]
+    │                              │
+    ▼ (Shared Storage)             ▼
+[ AWS EFS StorageClass ]     [ MySQL StatefulSet ]
+```
+```mermaid
+graph TD
+    %% Define Styles
+    classDef client fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef aws fill:#ff9900,stroke:#333,stroke-width:1px,color:#fff;
+    classDef k8s fill:#326ce5,stroke:#333,stroke-width:1px,color:#fff;
+    classDef db fill:#00758f,stroke:#333,stroke-width:1px,color:#fff;
+
+    %% Components
+    User([🌐 Public Web User]) :::client
+    
+    subgraph AWS_Cloud [AWS Cloud Infrastructure (Provisioned via Terraform)]
+        ALB[🔀 AWS Application Load Balancer] :::aws
+        ECR[(📦 Amazon ECR Image Registry)] :::aws
+        EFS[(💾 Amazon EFS Shared Storage)] :::aws
+        
+        subgraph EKS_Cluster [Amazon EKS Cluster]
+            Argo[🐙 ArgoCD GitOps Engine] :::k8s
+            Ingress[⚡ ALB Ingress Controller] :::k8s
+            HPA[📈 Horizontal Pod Autoscaler] :::k8s
+            
+            subgraph Namespace_App [Application Namespace]
+                Frontend[🎨 Frontend Pods <br> Nginx SPA] :::k8s
+                Backend[⚙️ Backend Pods <br> Python REST API] :::k8s
+                MySQL[(🛢️ MySQL StatefulSet)] :::db
+                NetPol{🛡️ Network Policy} :::k8s
+            end
+            
+            subgraph Namespace_Monitoring [Monitoring Namespace]
+                Prom[🔥 Prometheus Metrics] :::k8s
+                Graf[📊 Grafana Dashboards] :::k8s
+            end
+        end
+    end
+
+    %% Data Flows and Connections
+    User -->|HTTP/HTTPS Traffic| ALB
+    ALB -->|Routes Requests| Ingress
+    Ingress -->|Forwards Web Traffic| Frontend
+    Frontend -->|API Requests| Backend
+    
+    %% Storage and Database Relations
+    Frontend -.->|Read/Write Assets| EFS
+    Backend -->|Restricted Database Access| NetPol
+    NetPol -->|Authorized Queries| MySQL
+    
+    %% Management Flows
+    Argo -->|Continuous Reconcile / GitOps| Namespace_App
+    ECR -->|Pulls Docker Images| Frontend
+    ECR -->|Pulls Docker Images| Backend
+    Prom -->|Scrapes Performance Metrics| Backend
+    Graf -->|Queries Data Visuals| Prom
+    HPA -->|Monitors CPU & Scales Replicas| Backend
+```
+
+1. **Provisioning Layer**: HashiCorp Terraform automates the deployment of the underlying AWS network topologies (VPC, Subnets, Security Groups) and the EKS Cluster.
+2. **Delivery Layer (GitOps)**: ArgoCD tracks this repository to continuously synchronize and reconcile the active state of the Kubernetes cluster with our declaration files.
+3. **Application Layer**: A containerized two-tier microservices application (Frontend SPA on Nginx + Python Backend) integrated with a persistent MySQL relational database.
+4. **Security & Governance Layer**: Network Policies restrict cross-namespace traffic, Dedicated Namespaces isolate workloads, and SonarQube analyzes code quality.
+5. **Observability Layer**: Prometheus collects fine-grained performance metrics while Grafana visualizes infrastructure and application health.
 
 ---
 
-## ⚙️ Environment Variables
+## 📂 Repository Directory Structure
 
-Environment variables store dynamic text values locally in your terminal session. By defining them once here, you can copy and paste the remaining commands exactly as written without manually changing cluster names or account IDs every time.
-
-Run these commands in your terminal (replace the placeholder values inside the quotes with your actual AWS details):
-
-```bash
-# The exact name of your active EKS cluster
-export CLUSTER_NAME="your-eks-cluster-name"
-
-# The AWS region where your cluster lives (e.g., us-east-1, eu-west-1)
-export AWS_REGION="your-aws-region"
-
-# The Virtual Private Cloud (VPC) ID where your EKS cluster nodes are running
-export VPC_ID="your-vpc-id"
-
-# Automatically fetches your 12-digit AWS Account ID using the AWS CLI secure token service
-export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+```text
+├── .github/workflows/      # CI/CD pipelines (GitHub Actions)
+├── terraform/              # Infrastructure as Code (IaC)
+│   ├── main.tf             # Core AWS & EKS resource definitions
+│   ├── variables.tf        # Input variable declarations
+│   ├── provider.tf         # AWS and Kubernetes provider versions
+│   └── outputs.tf          # Managed infrastructure outputs
+├── src/                    # Application Source Code
+│   ├── frontend/           # Static Frontend SPA
+│   │   ├── index.html      # UI entry point
+│   │   └── Dockerfile      # Multi-stage Nginx build script
+│   └── backend/            # App REST API
+│       ├── app.py          # Python application logic
+│       └── Dockerfile      # Optimized Python runtime build
+├── k8s/                    # Kubernetes Manifests & GitOps Definitions
+│   ├── argocd/             # Application controller & sync setups
+│   ├── namespace.yaml      # Logical environment isolation
+│   ├── deployment.yaml     # Application workload specifications
+│   ├── service.yaml        # Internal networking abstractions
+│   ├── ingress.yaml        # AWS ALB configuration rules
+│   ├── hpa.yaml            # Horizontal Pod Autoscaling limits
+│   ├── network-policy.yaml # Least-privilege firewall rules
+│   ├── storage/            # Persistent Volume Claims & EFS configurations
+│   ├── mysql/              # StatefulSet and initialization scripts
+│   └── migration/          # Database schema schema run-once Jobs
+└── monitoring/             # Observability Stack Configuration
+    ├── prometheus/         # Metrics scraping and alert rules
+    └── grafana/            # Operational performance dashboards
 ```
 
 ---
 
-## 🔐 IAM Roles for Service Accounts (IRSA)
+## 🛠️ Component Breakdown & Engineering Implementation
 
-**What is IRSA?** In Kubernetes, applications use a "Service Account" to define identity inside the cluster. However, the AWS Load Balancer Controller needs to talk to the actual AWS API to create physical Application Load Balancers in your AWS account. IRSA securely links a Kubernetes Service Account to a real AWS IAM Role, allowing your cluster applications to manage AWS infrastructure without needing to hardcode dangerous AWS secret keys inside the containers.
+### 1. Infrastructure as Code (Terraform)
+The infrastructure layer is built modularly with HashiCorp Terraform to ensure immutability and rapid environment replication.
+* **`provider.tf`**: Secures state management using an isolated S3 remote backend with DynamoDB locking.
+* **`main.tf`**: Configures custom VPC topologies spanning 3 Availability Zones, public/private subnet tagging for optimal AWS ALB discovery, and managed EKS Node Groups.
+* **`variables.tf` / `outputs.tf`**: Parameterizes cluster scaling configurations and exports connection endpoints (`cluster_endpoint`, `oidc_provider_arn`).
 
-Follow these steps to set up secure permissions:
+### 2. Containerization & Registry (Docker & AWS ECR)
+Workloads are completely isolated and packaged into secure, minimal container layers.
+* **Frontend**: Utilizes a highly optimized lightweight **Nginx** server image to compile and host static files safely.
+* **Backend**: Multi-stage **Python** environment running a Flask/FastAPI backend configured with automated database schema migration scripts (`migration/`).
+* **AWS ECR**: Immutable image tags prevent runtime drift; image vulnerability scanning is forced on every upload registry action.
 
-1. **Associate the OIDC Provider:**
-   Kubernetes uses OpenID Connect (OIDC) to authenticate with AWS. This command tells your EKS cluster to trust AWS IAM for authentication tokens.
-   ```bash
-   eksctl utils associate-iam-oidc-provider --cluster=${CLUSTER_NAME} --approve --region=${AWS_REGION}
-   ```
+### 3. GitOps Continuous Delivery ()
+Manual configurations are eliminated. Cluster states are declared declaratively inside the `k8s/argocd/` manifests. ArgoCD continuously monitors this git repository branch, pulling down structural updates and executing zero-downtime, self-healing synchronizations directly against the Kubernetes API server.
 
-2. **Download the Official IAM Policy:**
-   This downloads a JSON file written by AWS containing the exact list of permissions (like creating targets, managing listeners, and deleting load balancers) the controller needs.
-   ```bash
-   curl -O https://githubusercontent.com
-   ```
+### 4. Advanced Kubernetes Orchestration & Security
+* **Network Policies**: Implements a zero-trust model. The database tier rejects all internet-facing communication, responding strictly to incoming API calls from authorized backend microservices.
+* **Storage Tier (AWS EFS)**: Integrates the EFS CSI Driver to provision persistent, shared network filesystems (`ReadWriteMany`), ensuring application pods preserve static uploads across cross-AZ rescheduling events.
+* **Horizontal Pod Autoscaler (HPA)**: Dynamically scales application replicas from `2` to `10` targets processing CPU utilization metrics spikes above 70%.
 
-3. **Create the IAM Policy in AWS:**
-   This uploads the downloaded JSON file to AWS IAM, naming it so it can be attached to our security role.
-   ```bash
-   aws iam create-policy \
-       --policy-name AWSLoadBalancerControllerIAMPolicy \
-       --policy-document file://iam_policy.json
-   ```
-
-4. **Create the IAM Role and Service Account:**
-   This `eksctl` command automates three complex steps at once: it creates an AWS IAM Role, attaches the policy we uploaded in Step 3, and generates a corresponding Kubernetes Service Account named `aws-load-balancer-controller` inside your cluster.
-   ```bash
-   eksctl create iamserviceaccount \
-     --cluster=${CLUSTER_NAME} \
-     --namespace=kube-system \
-     --name=aws-load-balancer-controller \
-     --role-name AmazonEKSLoadBalancerControllerRole \
-     --attach-policy-arn=arn:aws:iam::${AWS_ACCOUNT_ID}:policy/AWSLoadBalancerControllerIAMPolicy \
-     --approve \
-     --region=${AWS_REGION}
-   ```
+### 5. Enterprise Code Quality & Observability
+* **SonarQube**: Automatically evaluates code pushes for security vulnerabilities, technical debt, and test coverage parameters before staging application release cycles.
+* **Prometheus & Grafana**: Collects real-time container metrics (memory footprints, saturation rates, HTTP latencies), displaying actionable operations health dashboards for engineer review.
 
 ---
 
-## 🚀 Installation
+## 🚀 Step-by-Step Deployment Instructions
 
-Now that permissions are configured, we can download and deploy the application using Helm.
-
-1. **Clone the repository:**
-   Download this codebase onto your local machine and navigate into the folder.
+### Phase 1: Provision Core Infrastructure
+1. Initialize and download Terraform plugins:
    ```bash
-   git clone https://github.com
-   cd your-repo
+   cd terraform
+   terraform init
+   ```
+2. Validate configurations and deploy the footprint:
+   ```bash
+   terraform plan -out=tfplan
+   terraform apply tfplan
+   ```
+3. Update your local configuration context to point securely to your new cluster:
+   ```bash
+   aws eks update-kubeconfig --region \((terraform output -raw aws_region) --name\)(terraform output -raw cluster_name)
    ```
 
-2. **Add the official AWS EKS Helm repository:**
-   Helm needs to know where to find the software packages. We point it to the official, secure AWS domain and refresh Helm's local catalog index.
+### Phase 2: Build & Push Images to ECR
+1. Authenticate your local Docker daemon with your AWS account:
    ```bash
-   helm repo add eks https://github.io
-   helm repo update
+   aws ecr get-login-password --region your-region | docker login --username AWS --password-stdin ://amazonaws.com
+   ```
+2. Build and push your operational components:
+   ```bash
+   docker build -t your-repo/frontend:latest ./src/frontend
+   docker build -t your-repo/backend:latest ./src/backend
+   # (Execute docker tag and docker push sequences to secure your ECR endpoints)
    ```
 
-3. **Install the Chart:**
-   This command installs the AWS Load Balancer Controller. We pass the `--set` flags to inject our environment variables into the configuration, and we use `--set serviceAccount.create=false` to force Helm to use the secure IAM service account we already created in the previous step.
+### Phase 3: Bootstrap GitOps Delivery Engine
+1. Deploy the core components of the cluster state machine:
    ```bash
-   helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
-     --set clusterName=${CLUSTER_NAME} \
-     --set serviceAccount.create=false \
-     --set serviceAccount.name=aws-load-balancer-controller \
-     --set region=${AWS_REGION} \
-     --set vpcId=${VPC_ID} \
-     -n kube-system
+   kubectl apply -f k8s/namespace.yaml
+   kubectl apply -f k8s/argocd/install.yaml
    ```
+2. Apply the root application configuration definition to trigger structural resource generation:
+   ```bash
+   kubectl apply -f k8s/argocd/root-application.yaml
+   ```
+   *ArgoCD will automatically intercept your specifications, deploying your MySQL StatefulSets, EFS Storage claims, HPA scaling configurations, App Deployments, and your AWS Application Load Balancers.*
 
 ---
 
-## 🔍 Verification
+## 🔍 Verification & Infrastructure Smoke Testing
 
-Always check your work to ensure Kubernetes resources are healthy and running.
-
-1. **Check Helm release status:**
-   Verify that your Helm installation reports a status of `deployed`.
-   ```bash
-   helm list -n kube-system
-   ```
-
-2. **Verify controller pods are running:**
-   Pods are the actual running containers. The status column should show `Running` and the ready column should show `1/1` or `2/2`.
-   ```bash
-   kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
-   ```
-
-3. **Check deployment logs for errors:**
-   If the pods are crashing or showing errors, stream the application logs to read what went wrong behind the scenes.
-   ```bash
-   kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller --tail=50
-   ```
+* **Check GitOps Deployment Health**:
+  ```bash
+  argocd app get root-application
+  ```
+* **Verify Workload Distribution**:
+  ```bash
+  kubectl get all -n your-app-namespace
+  ```
+* **Retrieve External Web App Endpoint**:
+  ```bash
+  kubectl get ingress -n your-app-namespace
+  ```
 
 ---
 
-## 🌐 Sample Ingress Implementation
-
-To prove the controller is working, you can deploy a sample application and map an external web address to it. 
-
-1. Save the following content into a file named `sample-app.yaml`:
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: demo-web-app
-  namespace: default
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: demo-web
-  template:
-    metadata:
-      labels:
-        app: demo-web
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:latest
-        ports:
-        - containerPort: 80
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: demo-web-service
-  namespace: default
-spec:
-  ports:
-    - port: 80
-      targetPort: 80
-      protocol: TCP
-  type: ClusterIP
-  selector:
-    app: demo-web
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: demo-web-ingress
-  namespace: default
-  annotations:
-    # This annotation tells our controller to intercept this file and spin up an AWS Application Load Balancer (ALB)
-    kubernetes.io/ingress.class: alb
-    # Dictates that the ALB should face the public internet
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    # Defines the routing rules (Instance mode targets cluster nodes)
-    alb.ingress.kubernetes.io/target-type: instance
-spec:
-  rules:
-    - http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: demo-web-service
-                port:
-                  number: 80
-```
-
-2. Apply the sample file to your cluster:
-   ```bash
-   kubectl apply -f sample-app.yaml
-   ```
-
-3. Retrieve your public URL (it may take 2-3 minutes for AWS to fully provision the load balancer):
-   ```bash
-   kubectl get ingress demo-web-ingress
-   ```
-   *Look at the `ADDRESS` field output. Paste that long AWS URL into your web browser to view the default Nginx welcome screen!*
-
----
-
-## 🧽 Cleanup
-
-Cloud infrastructure costs money when left running. Always tear down your test environments when you are finished practicing.
-
-1. **Delete the sample application & ingress:**
-   ```bash
-   kubectl delete -f sample-app.yaml
-   ```
-
-2. **Uninstall the Helm release:**
-   ```bash
-   helm uninstall aws-load-balancer-controller -n kube-system
-   ```
-
-3. **Delete the IAM Service Account configuration:**
-   ```bash
-   eksctl delete iamserviceaccount \
-     --cluster=${CLUSTER_NAME} \
-     --namespace=kube-system \
-     --name=aws-load-balancer-controller \
-     --region=${AWS_REGION}
-   ```
-
-4. **Delete the AWS IAM Policy:**
-   ```bash
-   aws iam delete-policy --policy-arn arn:aws:iam::${AWS_ACCOUNT_ID}:policy/AWSLoadBalancerControllerIAMPolicy
-   ```
-
----
-
-## 🛠️ Troubleshooting
-
-### Common Helm Chart Repository Error
-If you encounter connection failures or `404 Not Found` errors during the installation setup phase, check your repo URLs. The application commands will fail if you accidentally try using a legacy or incorrect `github.io` root domain instead of the dedicated AWS hosting subdomain.
-
-**Fix:**
+## 🧽 Teardown & De-provisioning
+To cleanly eliminate all provisions and avoid unnecessary cloud billing overhead:
 ```bash
-# Manually correct the repository path to the official AWS EKS charts
-helm repo add eks https://github.io
-helm repo update
+# 1. Instruct ArgoCD to clean up K8s objects safely
+kubectl delete -f k8s/argocd/root-application.yaml
+
+# 2. Obliterate backend core Cloud resources via Terraform 
+cd terraform
+terraform destroy -auto-approve
 ```
 
 ---
 
 ## 📄 License
+This architecture framework is configured under the terms of the **MIT License**. Feel free to use, distribute, and modify it within architectural code practices.
 
-Distributed under the **MIT License**. This means you are completely free to use, modify, copy, and distribute this code for personal or commercial projects, provided you include the original copyright notice. See the full terms below:
-
-```text
-MIT License
-
-Copyright (c) 2026 Your Name / Organization
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```

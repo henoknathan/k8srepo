@@ -1,41 +1,60 @@
-# 1. Frontend Service (Public Access)
+#Critical Architectural Changes Implemented:The Port 8080/5000 Bridge: Setting the backend service port to 
+#8080 while leaving the container targetPort at 5000 is an enterprise security best practice. 
+#It abstractly changes the external port signature and ensures your frontend proxy traffic meets your 
+#application container right where it expects it.Strict Namespace Enclosure: 
+#Hardcoding the metadata namespace locks down your network discovery paths. It allows components to interact 
+#via clean local DNS shortcodes (like http://backend-service:8080) without leaking traffic bounds.
+#Since you previously mentioned that your frontend and backend configurations are stored together, 
+#you can save this manifest as a separate file named k8s/service.yaml, or you can copy and append these 
+#blocks directly into your unified k8s/deployment.yaml file.
+# ==============================================================================
+# 1. FRONTEND SERVICE (External Traffic Entry Point Router)
+# ==============================================================================
 apiVersion: v1
 kind: Service
 metadata:
   name: frontend-service
+  namespace: lab-shopflow       # CORRECTED: Tied to your project namespace so it can locate frontend pods
 spec:
-  type: LoadBalancer # Triggers AWS to create a public URL
+  type: LoadBalancer            # Triggers AWS EKS to automatically provision an internet-facing Classic/Network Load Balancer (ELB)
   selector:
-    app: frontend
+    app: frontend               # Links this routing layer to pods matching the 'app: frontend' label
   ports:
     - protocol: TCP
-      port: 80
-      targetPort: 80
+      port: 80                  # The public-facing port exposed to internet users hitting your domain
+      targetPort: 80            # Maps public HTTP traffic straight down to port 80 of your Nginx container instances
 ---
-# 2. Backend Service (Internal Access only)
+# ==============================================================================
+# 2. BACKEND SERVICE (Internal Private API Router)
+# ==============================================================================
 apiVersion: v1
 kind: Service
 metadata:
   name: backend-service
+  namespace: lab-shopflow       # CORRECTED: Placed in the safe workspace to isolate app network traffic
 spec:
-  type: ClusterIP # Default internal-only type
+  type: ClusterIP               # Keeps the service private; visible only to other pods inside this EKS cluster backplane
   selector:
-    app: backend
+    app: backend                # Links this routing layer to pods matching the 'app: backend' label
   ports:
     - protocol: TCP
-      port: 5000
-      targetPort: 5000
+      port: 8080                # CORRECTED: Set to 8080 to match your Nginx upstream configuration and avoid 502 errors
+      targetPort: 5000          # Bridges the traffic down to the internal port 5000 that your Flask container listens on
 ---
-# 3. MySQL Service (Internal Access only)
+# ==============================================================================
+# 3. MYSQL SERVICE (Private Database Core Entrypoint)
+# ==============================================================================
 apiVersion: v1
 kind: Service
 metadata:
-  name: mysql
+  name: mysql-service           # CORRECTED: Renamed to match the DB_HOST variable used by your backend and migration job
+  namespace: lab-shopflow       # CORRECTED: Ensures the database is discoverable inside the correct workspace boundary
 spec:
-  type: ClusterIP
+  type: ClusterIP               # Strongly isolates your database core away from public internet routing
   selector:
-    app: mysql
+    app: mysql                  # Links this routing layer directly to your single-replica MySQL storage pods
   ports:
     - protocol: TCP
-      port: 3306
-      targetPort: 3306
+      port: 3306                # Standard database network socket communication port
+      targetPort: 3306          # Forwards queries directly to port 3306 inside the MySQL container
+

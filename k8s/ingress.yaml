@@ -1,15 +1,61 @@
+# ==============================================================================
+# ENTERPRISE RECONCILIATION LOOP: PERSISTENT STORAGE CLAIMS VERIFICATION
+# ==============================================================================
+# COMMAND PURPOSE: 
+# - Queries the active 'monitoring' namespace inside the EKS cluster.
+# - Validates that the cloud infrastructure has successfully carved out storage.
+#
+# EXPECTED STACK VERIFICATION RESULTS:
+# - Look for the status column showing 'Bound' for all requested claims.
+# - You should see your two distinct volume templates:
+#   1. A 50Gi claim allocated for the Prometheus time-series database (TSDB).
+#   2. A 10Gi claim allocated for your Grafana custom dashboard memory files.
+# ==============================================================================
+
+#kubectl get pvc -n monitoring
+
+# ==============================================================================
+# ENTERPRISE ROUTING FIREWALL WORKLOG & AUDIT MANIFEST (ingress.yaml)
+# ==============================================================================
+# ARCHITECTURAL CHANGES IMPLEMENTED & REASONING:
+#
+# 1. ADDED SECURE INFRASTRUCTURE ROUTING RULES:
+#    - The three newly introduced SSL annotations (certificate-arn, listen-ports, 
+#      and ssl-redirect) instruct the AWS Load Balancer Controller to dynamically 
+#      provision secure port 443 entry points directly on your active AWS network.
+#
+# 2. PRESERVED PROACTIVE HEALTH CHECK BLOCKS:
+#    - The dedicated '/health' monitoring configuration is kept completely intact. 
+#      The AWS cloud infrastructure will query this specific app routing path every 
+#      15 seconds, automatically isolating broken pods before public users see them.
+#
+# 3. RESOLVED INTERNAL PORT SYNCHRONIZATION BUG:
+#    - Changed the target routing network point from port 5000 to port 8080. 
+#      If left at 5000, the physical AWS Load Balancer would forward encrypted 
+#      user traffic to an inactive port, causing immediate '502 Bad Gateway' crashes.
+#
+# 4. IMPLEMENTED SECURE REVENUE & OPERATIONS ROUTING SPLIT (/grafana):
+#    - Expanded the network boundary rules array to include the internal monitoring service.
+#      External operations traffic hitting your domain's sub-path is automatically caught 
+#      at the SSL termination edge and proxies safely down to Grafana port 80.
+# ==============================================================================
+
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: multi-tier-ingress
   annotations:
-    # Essential for AWS
+    # --- Baseline AWS Settings ---
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/load-balancer-name: enterprise-alb
     
-    # NEW: Health Check Settings
-    # This ensures the ALB checks the right path and expects a '200 OK'
+    # --- SSL/TLS & HTTPS Configuration ---
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:514497148354:certificate/YOUR-ACM-GUID-HERE"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    
+    # --- Health Check Settings ---
     alb.ingress.kubernetes.io/healthcheck-path: /health
     alb.ingress.kubernetes.io/healthcheck-interval-seconds: '15'
     alb.ingress.kubernetes.io/success-codes: '200'
@@ -18,20 +64,34 @@ spec:
   rules:
   - http:
       paths:
-      # Specific paths (/api) MUST come before the catch-all (/)
+      # --- NEW: Grafana Monitoring Interface Secure Proxy Route ---
+      # CRITICAL ORDER NOTE: Specific subpaths must sit at the top of the execution list array.
+      - path: /grafana
+        pathType: Prefix
+        backend:
+          service:
+            # Targets the specific internal service name created automatically by your Helm chart
+            name: monitor-stack-grafana 
+            port:
+              number: 80
+
+      # --- Backend API Service Route ---
       - path: /api
         pathType: Prefix
         backend:
           service:
             name: backend-service
             port:
-              number: 5000
+              number: 8080 
+
+      # --- Catch-All Frontend Web Traffic Route ---
       - path: /
         pathType: Prefix
         backend:
           service:
             name: frontend-service
             port:
-              number: 80 
-              
+              number: 80
+
+
 

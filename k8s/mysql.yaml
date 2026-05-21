@@ -3,6 +3,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: mysql-service
+  namespace: lab-shopflow # MUST MATCH THE SECRET NAMESPACE
 spec:
   ports:
   - port: 3306
@@ -15,6 +16,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mysql
+  namespace: lab-shopflow # MUST MATCH THE SECRET NAMESPACE
 spec:
   replicas: 1 # Databases should typically have 1 replica unless using a cluster
   selector:
@@ -30,12 +32,14 @@ spec:
         image: mysql:8.0
         env:
         - name: MYSQL_ROOT_PASSWORD
-          value: "natlid11" # Matches your kubectl secret password
+          valueFrom:
+            secretKeyRef:
+              name: db-secret      # MATCHES YOUR SECRET.yaml METADATA.NAME
+              key: db-password     # MATCHES YOUR SECRET.yaml DATA KEY
         - name: MYSQL_DATABASE
-          value: "shopflow_db" # Matches the DB_NAME in your backend
+          value: "shopflow_db" 
         ports:
         - containerPort: 3306
-        
         # RESOURCE LIMITS: Prevents "Noisy Neighbor" issues in EKS
         resources:
           requests:
@@ -44,14 +48,16 @@ spec:
           limits:
             cpu: "500m"
             memory: "512Mi"
-            
-        # STORAGE: Connects to AWS EFS
+
+    # STORAGE: Connects to AWS EFS         
         volumeMounts:
         - name: mysql-persistent-storage
           mountPath: /var/lib/mysql
       volumes:
       - name: mysql-persistent-storage
         persistentVolumeClaim:
-          claimName: efs-claim # Must match the claim in your storage.yaml
+          claimName: efs-claim 
+
+
 
 

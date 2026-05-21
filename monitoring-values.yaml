@@ -1,0 +1,136 @@
+# ==============================================================================
+# OBSERVAIBILITY INTEGATION PLATFORM WORKLOG & AUDIT MANIFEST
+# ==============================================================================
+# ARCHITECTURAL ENHANCEMENTS IMPLEMENTED & REASONING:
+#
+# 1. CONSOLIDATED PROMETHEUS DEPLOYMENT MATRIX:
+#    - Merged independent alerting configurations into a single, cohesive Helm values 
+#      file. This simplifies environment tracking and enforces predictable dependency structures.
+#
+# 2. ENABLED NATIVE GRAFANA-MANAGED ROUTING STATE (handleGrafanaManagedAlerts):
+#    - Interlinks the metrics interface with the notification cluster. Grafana-designed 
+#      dashboard alerts are automatically passed down to the core Alertmanager loop.
+#
+# 3. CONFIGURED SECURE INTERNAL PROXY ROUTING:
+#    - Binds data collection endpoints through Kubernetes internal cluster networking 
+#      services. Grafana pulls active alert lists and cluster metrics securely via internal 
+#      proxies without exposing the ports to the public internet.
+
+#Expose the Grafana UI web portal using your secure AWS Application Load Balancer Ingress (ingress.yaml) 
+#file so your team can log in via HTTPS?Configure a Persistent Volume Claim for Prometheus so your metrics 
+#data doesn't disappear if a container restarts?
+# ==============================================================================
+
+# ==============================================================================
+# ENTERPRISE PROMETHEUS, ALERTMANAGER, & GRAFANA VALUES CONFIGURATION
+# ==============================================================================
+# ==============================================================================
+# ENTERPRISE OBSERVABILITY OBSERVABILITY STACK DEPLOYMENT SCRIPT
+# ==============================================================================
+# PURPOSE: 
+# 1. Downloads the certified Prometheus, Alertmanager, and Grafana engine binaries.
+# 2. provisions an isolated tracking perimeter (Namespace) inside the EKS cluster.
+# 3. Mounts customized notification routing filters and Grafana user dashboards.
+# ==============================================================================
+
+# --- STEP 1: DOWNLOAD CERTIFIED OBSERVAIBILITY ENGINES ---
+# PURPOSE: Registers the Prometheus-Community repository with your local Helm execution layer.
+# TECHNICAL NOTE: Updates your local index ledger to catch recent platform stability hotfixes.
+#helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#helm repo update
+
+# --- STEP 2: PROVISION MONITORING WORKLOADS MESH ---
+# PURPOSE: Spins up Prometheus, Alertmanager, and Grafana simultaneously into their own namespace.
+# TECHNICAL NOTE: Passes the custom 'monitoring-values.yaml' file to inject your corporate Slack webhook 
+# endpoints, configure quiet intervals, and activate native Grafana-to-Alertmanager dashboard proxying.
+#helm install monitor-stack prometheus-community/kube-prometheus-stack \
+#  --namespace monitoring \
+#  --create-namespace \
+#  -f monitoring-values.yaml
+#Verification and Post-Deployment CheckTo confirm that your unified monitoring suite successfully booted up 
+#inside the cluster, execute this verification loop in your terminal: 
+# Checks the status of all metrics collection engines, dashboards, and routers
+#kubectl get pods -n monitoring
+
+# ------------------------------------------------------------------------------
+# SECTION 1: ALERTMANAGER CORE ENGINE & ROUTING
+# ------------------------------------------------------------------------------
+# ==============================================================================
+# ENTERPRISE PROMETHEUS, ALERTMANAGER, & GRAFANA VALUES CONFIGURATION
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# SECTION 1: ALERTMANAGER CORE ENGINE & ROUTING
+# ------------------------------------------------------------------------------
+alertmanager:
+  enabled: true
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ['alertname', 'cluster', 'severity']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: 'slack-notifications'
+    receivers:
+    - name: 'slack-notifications'
+      slack_configs:
+      - api_url: 'https://slack.com'
+        channel: '#devops-alerts'
+        send_resolved: true
+        title: '[[{{ .Status | toUpper }}]] - EKS Cluster Alert: {{ .CommonLabels.alertname }}'
+        text: >-
+          *Description:* {{ .CommonAnnotations.description }}
+          *Severity:* `{{ .CommonLabels.severity }}`
+          *Impacted Component:* {{ .CommonLabels.instance }}
+
+# ------------------------------------------------------------------------------
+# SECTION 2: PROMETHEUS PERSISTENT CORE DATABASE (TSDB)
+# ------------------------------------------------------------------------------
+prometheus:
+  prometheusSpec:
+    # PURPOSE: Ensures metric retention lasts long enough for corporate historical audit needs
+    retention: 30d
+    
+    # --- PROMETHEUS STORAGE STATE AUTOMATION ---
+    # PURPOSE: Replaces ephemeral storage with an immutable AWS EFS network drive allocation.
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          # References the automated EFS driver StorageClass provisioned via your Terraform main.tf
+          storageClassName: efs-sc 
+          accessModes:
+            - ReadWriteMany
+          resources:
+            requests:
+              storage: 50Gi # Allocates baseline storage block space for cluster time-series tracking data
+
+# ------------------------------------------------------------------------------
+# SECTION 3: GRAFANA INTERFACE & PERSISTENT DASHBOARDS
+# ------------------------------------------------------------------------------
+grafana:
+  enabled: true
+  adminPassword: "EnterpriseSecurePassword2026"
+  
+  # --- GRAFANA STORAGE CONFIGURATION ---
+  # PURPOSE: Preserves custom dashboards, login records, and plugin states across lifecycle updates.
+  persistence:
+    enabled: true
+    storageClassName: efs-sc
+    accessModes:
+      - ReadWriteMany
+    size: 10Gi
+    
+  # --- GRAPH ENGINE AUTOMATION ---
+  # PURPOSE: Configures Grafana to automatically detect and integrate your Alertmanager metrics 
+  # so you can visualize and silence alerts inside the Grafana UI.
+  additionalDataSources:
+    - name: Alertmanager
+      type: alertmanager
+      access: proxy
+      # Internal Kubernetes service DNS string pointing to your cluster Alertmanager instance
+      url: http://localhost:9093 
+      jsonData:
+        implementation: prometheus  # Tells Grafana this is a native Prometheus Alertmanager API backend
+        handleGrafanaManagedAlerts: true  # Connects Grafana alerts to the Alertmanager pipeline

@@ -1,18 +1,67 @@
+#Architectural Purpose and FunctionalityThe GitOps Reconciliation Loop: ArgoCD functions as a continuous 
+#reconciliation loop [1]. Every 3 minutes (by default), it downloads your Git repository state, 
+#compares it to the live AWS EKS cluster state, and calculates a diff [1].Handling Your Jenkins Image 
+#Injections: Since your Jenkins pipeline uses sed to inject live tags into k8s/deployment.yaml right before 
+#running kubectl apply, you must decide on your final reconciliation design strategy:If Jenkins runs kubectl 
+#apply: Your Jenkins pipeline directly pushes the live manifests. ArgoCD will mark the application as 
+#OutOfSync because the image tags in the cluster don't match the placeholders (TARGET_BACKEND_IMAGE) in your 
+#Git repo. To stop ArgoCD from overriding your Jenkins updates, add this ignore rule inside the spec: 
+#block of your Argo file:
+#True GitOps (Alternative): Instead of letting Jenkins run kubectl apply, you modify Jenkins to run sed, 
+#commit the updated file back to Git, and let ArgoCD pull the new commit and deploy it automatically.
+# ==============================================================================
+#Verifying ArgoCD StatusOnce you apply this file (kubectl apply -f argocd-app.yaml -n argocd), 
+#you can check the live tracking matrix in your terminal:
+
+# ARGOCD ENTERPRISE GITOPS LIFECYCLE DEPLOYMENT
+# ==============================================================================
+
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: enterprise-gitops-sync
-  namespace: argocd
+  name: shopflow-enterprise-gitops  # Unique identifier for this tracking manager in the ArgoCD UI
+  namespace: argocd                 # Mandated: ArgoCD controllers look exclusively inside this namespace for sync rules
 spec:
+ignoreDifferences:
+- group: apps
+  kind: Deployment
+  jsonPointers:
+  - /spec/template/spec/containers/0/image
+
+  # PURPOSE: Segregates cluster administrative access controls.
+  # DETAIL: The 'default' project provides full cluster-wide management privileges.
   project: default
+  
+  # ==============================================================================
+  # SOURCE CONTROL TRACKING MECHANISM (GITOPS TRUTH LAYER)
+  # ==============================================================================
   source:
-    repoURL: 'https://github.com/henoknathan/k8srepo.git' # <-- Put your real GitHub link here
-    targetRevision: HEAD
-    path: k8s # ArgoCD watches your entire existing k8s folder
+    repoURL: 'https://github.com/henoknathan/k8srepo.git' # The Git repository hosting your infrastructure code
+    targetRevision: HEAD                                  # Continuously tracks the absolute tip of your default branch
+    path: k8s                                             # Instructs ArgoCD to watch your k8s folder exclusively
+    
+  # ==============================================================================
+  # DESTINATION TARGET CONTROL LAYER
+  # ==============================================================================
   destination:
-    server: 'default.svc'
-    namespace: default
+    # CORRECTED: Changed from 'default.svc' to the standard valid Kubernetes internal local API string
+    server: 'https://default.svc'
+    
+    # CORRECTED: Swapped from 'default' to your real enterprise application namespace
+    # PURPOSE: Ties the fallback deployment scope directly to your dedicated application environment workspace
+    namespace: lab-shopflow
+    
+  # ==============================================================================
+  # SYNCHRONIZATION AND SELF-HEALING ENGINE POLICIES
+  # ==============================================================================
   syncPolicy:
     automated:
+      # PURPOSE: Prevents configuration drift and removes deprecated architectural components.
+      # DETAIL: If a file (like an old service) is deleted from Git, Argo automatically deletes it from EKS.
       prune: true
+      
+      # PURPOSE: Enforces strict infrastructure state enforcement (Anti-Tampering).
+      # DETAIL: If an engineer manually alters a pod or deployment via the CLI ('kubectl edit'), 
+      # ArgoCD will instantly overwrite the manual changes and restore the Git configuration.
       selfHeal: true
+

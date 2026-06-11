@@ -31,7 +31,7 @@ pipeline {
     // =========================================================================
     // IMPROVEMENTS IN GLOBAL PIPELINE CONFIGURATION
     /**
-    Step 1: Parameterize Sensitive VariablesPurpose: Hardcoding AWS Account IDs and SonarQube 
+    Step 1: Parameterize Sensitive Variables Purpose: Hardcoding AWS Account IDs and SonarQube 
     URLs directly in source files leaks internal infrastructure data and causes structural rigidity. 
     By moving these values into Jenkins Global Credentials or Environment Management, you can reuse 
     the exact same Jenkinsfile across staging, QA, and production clusters without editing the file code.
@@ -531,7 +531,7 @@ pipeline {
         failure {
             node('master-node') {
                 script {
-                    echo "🚨 Pipeline failed or EKS deployment timed out! Initiating automated rollback..."
+                    echo "Pipeline failed or EKS deployment timed out! Initiating automated rollback..."
                     
                     withCredentials([[
                         $class: 'UsernamePasswordMultiBinding', 
@@ -553,7 +553,7 @@ pipeline {
                         sh "kubectl rollout status deployment/backend -n lab-shopflow --timeout=120s"
                         sh "kubectl rollout status deployment/frontend -n lab-shopflow --timeout=120s"
                         
-                        echo "🔒 Automated rollback completed successfully. Your previous stable workloads are online."
+                        echo "Automated rollback completed successfully. Your previous stable workloads are online."
                     }
                 }
             }

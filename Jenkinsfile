@@ -1,24 +1,5 @@
-#Enterprise DevSecOps PipelineThis fully integrated Jenkinsfile handles security scans, 
-#quality validations, vulnerability checks, and sequential schema upgrades:
 pipeline {
-    // Tells Jenkins to run this pipeline on a worker node or master labeled 'master-node'
-    //agent { label 'master-node' }
-        // =========================================================================
-    // UPDATED PIPELINE EXECUTION COMPLIANCE ENGINE
-    // =========================================================================
-    // OLD MECHANISM: agent { label 'master-node' }
-    /**
-    Step 2: Containerize the Build AgentPurpose: Using a fixed, static server label like master-node 
-    forces pipelines to share the same OS environment. This causes "tool-version drift" 
-    (e.g., one job needs Python 3.9, another needs Python 3.11) and risks running out of disk space. 
-    Switching to a dynamic Docker agent ensures that every single build executes inside an isolated 
-    container that is destroyed immediately after completion. 
-    ---(Note: If you run your Jenkins workers natively inside an EKS cluster, you can swap this docker 
-    block with a kubernetes pod template block to maximize system performance).
-    */
-    // NEW MECHANISM: Dynamic Multi-Tool Container Agent Configuration
-    // PURPOSE: Guarantees explicit runtime dependencies (aws-cli, kubectl, trivy) 
-    // are standardized without bloating or altering physical Jenkins worker nodes.
+
     agent {
         docker {
             image 'amazon/aws-cli:latest' // Base agent image equipped with AWS operational binaries

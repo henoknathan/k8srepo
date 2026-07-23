@@ -11,7 +11,8 @@
 #commit the updated file back to Git, and let ArgoCD pull the new commit and deploy it automatically.
 # ==============================================================================
 #Verifying ArgoCD StatusOnce you apply this file (kubectl apply -f argocd-app.yaml -n argocd), 
-#you can check the live tracking matrix in your terminal:
+#you can check the live tracking matrix in your terminal: argocd app get shopflow-enterprise-gitops
+
 
 # ARGOCD ENTERPRISE GITOPS LIFECYCLE DEPLOYMENT
 # ==============================================================================
@@ -44,10 +45,10 @@ ignoreDifferences:
   # DESTINATION TARGET CONTROL LAYER
   # ==============================================================================
   destination:
-    # CORRECTED: Changed from 'default.svc' to the standard valid Kubernetes internal local API string
+    # Changed from 'default.svc' to the standard valid Kubernetes internal local API string
     server: 'https://default.svc'
     
-    # CORRECTED: Swapped from 'default' to your real enterprise application namespace
+    # Swapped from 'default' to your real enterprise application namespace
     # PURPOSE: Ties the fallback deployment scope directly to your dedicated application environment workspace
     namespace: lab-shopflow
     

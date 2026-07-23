@@ -166,6 +166,45 @@ module "eks" {
 # ==============================================================================
 # SECTION 4: IAM ROLES FOR SERVICE ACCOUNTS (IRSA) & HELM INTEGRATION
 # ==============================================================================
+# ==============================================================================
+# SECTION 4: IAM ROLES FOR SERVICE ACCOUNTS (IRSA) & HELM INTEGRATION
+# ==============================================================================
+
+# --- AWS Load Balancer Controller IAM Role Automation ---
+module "lb_role" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.39.0"
+
+  role_name                              = "eks-lb-controller-role"
+  attach_load_balancer_controller_policy = true
+
+  oidc_providers = {
+    main = {
+      provider_arn               = module.eks.oidc_provider_arn
+      namespace_service_accounts = ["kube-system:aws-load-balancer-controller"]
+    }
+  }
+}
+
+# --- AWS Load Balancer Controller Helm Installation ---
+resource "helm_release" "aws_lb_controller" {
+  name       = "aws-load-balancer-controller"
+  repository = "https://aws.github.io/eks-charts"
+  chart      = "aws-load-balancer-controller"
+  namespace  = "kube-system"
+
+  values = [
+    <<-EOT
+    clusterName: ${module.eks.cluster_name}
+    serviceAccount:
+      create: true
+      name: aws-load-balancer-controller
+      annotations:
+        # FIXED: Resolved the mangled string to the correct EKS Pod Identity key
+        ://amazonaws.com: ${module.lb_role.iam_role_arn}
+    EOT
+  ]
+}
 
 # --- AWS Load Balancer Controller IAM Role Automation ---
 module "lb_role" {

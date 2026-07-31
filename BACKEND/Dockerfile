@@ -1,4 +1,4 @@
-# 🛠️ Critical Adjustments Explained
+
 #EXPOSE 8080 (Network Alignment): Your original line referenced port 5000 because 
 # that was what Flask defaulted to. Since the updated app.py script now explicitly runs on port=8080 to sync with 
 # your Nginx upstream proxy config, updating this documentation line ensures clarity for anyone inspecting the 

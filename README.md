@@ -2,7 +2,7 @@ Shopflow Enterprise: Production-Grade GitOps & DevSecOps E-Commerce Platform
 
 A high-availability, multi-tier web application built using Kubernetes (AWS EKS v1.30) and provisioned natively via Terraform (AWS Module v21.x). This architecture implements a decoupled microservices design—separating an optimized Nginx frontend proxy, a multi-worker Gunicorn Python backend, a stateful MySQL cluster, and a centralized AWS Elastic File System (EFS) core—while maintaining strict Zero-Trust network boundaries and fully automated GitOps delivery.
 
-Architectural Topology Blueprint
+Architectural Topology Blueprint:
 
                [ Public Internet Edge ]
                           │ (HTTP 80 -> HTTPS 443 Redirect)

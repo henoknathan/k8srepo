@@ -1,3 +1,73 @@
+# 🎯 Network Traffic Verification Checklist
+
+# With this final configuration file corrected, your cluster networking 
+# maps out perfectly:Public Internet 
+# ➡️ AWS ALB Ingress (Processes HTTPS on 443, drops insecure port 80).
+# AWS ALB 
+# ➡️ shopflow-frontend-svc (Hits ClusterIP Port 80, forwards to Nginx container port 80).
+# Nginx Proxy 
+# ➡️ backend-service (Strips /api, routes to backend ClusterIP Port 8080, lands on Gunicorn container 
+# port 8080).Gunicorn App 
+# ➡️ mysql-service (Hits database ClusterIP Port 3306, fully insulated by your zero-trust 
+# network firewall rules).
+
+# ==============================================================================
+# 1. FRONTEND SERVICE (Web Traffic Routing Layer)
+# ==============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  # FIXED: Renamed to match the exact string expected by your AWS ALB Ingress rule
+  name: shopflow-frontend-svc
+  namespace: lab-shopflow       
+spec:
+  # FIXED: Swapped to ClusterIP to let your AWS ALB Ingress safely manage edge traffic
+  type: ClusterIP               
+  selector:
+    app: frontend               
+  ports:
+    - protocol: TCP
+      port: 80                  
+      targetPort: 80            
+---
+# ==============================================================================
+# 2. BACKEND SERVICE (Internal Private API Router)
+# ==============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: lab-shopflow       
+spec:
+  type: ClusterIP               
+  selector:
+    app: backend                
+  ports:
+    - protocol: TCP
+      port: 8080                
+      # FIXED: Changed from 5000 to 8080 to perfectly hit your Gunicorn production engine
+      targetPort: 8080          
+---
+# ==============================================================================
+# 3. MYSQL SERVICE (Private Database Core Entrypoint)
+# ==============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service           
+  namespace: lab-shopflow       
+spec:
+  type: ClusterIP               
+  selector:
+    app: mysql                  
+  ports:
+    - protocol: TCP
+      port: 3306                
+      targetPort: 3306          
+
+
+
+
 #Critical Architectural Changes Implemented:The Port 8080/5000 Bridge: Setting the backend service port to 
 #8080 while leaving the container targetPort at 5000 is an enterprise security best practice. 
 #It abstractly changes the external port signature and ensures your frontend proxy traffic meets your 
@@ -10,53 +80,53 @@
 # ==============================================================================
 # 1. FRONTEND SERVICE (External Traffic Entry Point Router)
 # ==============================================================================
-apiVersion: v1
-kind: Service
-metadata:
-  name: frontend-service
-  namespace: lab-shopflow       # CORRECTED: Tied to your project namespace so it can locate frontend pods
-spec:
-  type: LoadBalancer            # Triggers AWS EKS to automatically provision an internet-facing Classic/Network Load Balancer (ELB)
-  selector:
-    app: frontend               # Links this routing layer to pods matching the 'app: frontend' label
-  ports:
-    - protocol: TCP
-      port: 80                  # The public-facing port exposed to internet users hitting your domain
-      targetPort: 80            # Maps public HTTP traffic straight down to port 80 of your Nginx container instances
----
-# ==============================================================================
-# 2. BACKEND SERVICE (Internal Private API Router)
-# ==============================================================================
-apiVersion: v1
-kind: Service
-metadata:
-  name: backend-service
-  namespace: lab-shopflow       # CORRECTED: Placed in the safe workspace to isolate app network traffic
-spec:
-  type: ClusterIP               # Keeps the service private; visible only to other pods inside this EKS cluster backplane
-  selector:
-    app: backend                # Links this routing layer to pods matching the 'app: backend' label
-  ports:
-    - protocol: TCP
-      port: 8080                # CORRECTED: Set to 8080 to match your Nginx upstream configuration and avoid 502 errors
-      targetPort: 5000          # Bridges the traffic down to the internal port 5000 that your Flask container listens on
----
-# ==============================================================================
-# 3. MYSQL SERVICE (Private Database Core Entrypoint)
-# ==============================================================================
-apiVersion: v1
-kind: Service
-metadata:
-  name: mysql-service           # CORRECTED: Renamed to match the DB_HOST variable used by your backend and migration job
-  namespace: lab-shopflow       # CORRECTED: Ensures the database is discoverable inside the correct workspace boundary
-spec:
-  type: ClusterIP               # Strongly isolates your database core away from public internet routing
-  selector:
-    app: mysql                  # Links this routing layer directly to your single-replica MySQL storage pods
-  ports:
-    - protocol: TCP
-      port: 3306                # Standard database network socket communication port
-      targetPort: 3306          # Forwards queries directly to port 3306 inside the MySQL container
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: frontend-service
+#   namespace: lab-shopflow       # CORRECTED: Tied to your project namespace so it can locate frontend pods
+# spec:
+#   type: LoadBalancer            # Triggers AWS EKS to automatically provision an internet-facing Classic/Network Load Balancer (ELB)
+#   selector:
+#     app: frontend               # Links this routing layer to pods matching the 'app: frontend' label
+#   ports:
+#     - protocol: TCP
+#       port: 80                  # The public-facing port exposed to internet users hitting your domain
+#       targetPort: 80            # Maps public HTTP traffic straight down to port 80 of your Nginx container instances
+# ---
+# # ==============================================================================
+# # 2. BACKEND SERVICE (Internal Private API Router)
+# # ==============================================================================
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: backend-service
+#   namespace: lab-shopflow       # CORRECTED: Placed in the safe workspace to isolate app network traffic
+# spec:
+#   type: ClusterIP               # Keeps the service private; visible only to other pods inside this EKS cluster backplane
+#   selector:
+#     app: backend                # Links this routing layer to pods matching the 'app: backend' label
+#   ports:
+#     - protocol: TCP
+#       port: 8080                # CORRECTED: Set to 8080 to match your Nginx upstream configuration and avoid 502 errors
+#       targetPort: 5000          # Bridges the traffic down to the internal port 5000 that your Flask container listens on
+# ---
+# # ==============================================================================
+# # 3. MYSQL SERVICE (Private Database Core Entrypoint)
+# # ==============================================================================
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: mysql-service           # CORRECTED: Renamed to match the DB_HOST variable used by your backend and migration job
+#   namespace: lab-shopflow       # CORRECTED: Ensures the database is discoverable inside the correct workspace boundary
+# spec:
+#   type: ClusterIP               # Strongly isolates your database core away from public internet routing
+#   selector:
+#     app: mysql                  # Links this routing layer directly to your single-replica MySQL storage pods
+#   ports:
+#     - protocol: TCP
+#       port: 3306                # Standard database network socket communication port
+#       targetPort: 3306          # Forwards queries directly to port 3306 inside the MySQL container
 
 # Why This Architecture Works PerfectlyPorts Match Up Exactly: 
 # 1 - Ports Match Up Exactly: Your backend-service listens on port 8080, which perfectly satisfies the upstream string you defined in your Nginx configuration (backend-service.lab-shopflow.svc.cluster.local:8080).
@@ -85,8 +155,8 @@ spec:
 # "An Ingress workflow provides three massive operational advantages:
 # 1 - Cost Consolidation: A single AWS Application Load Balancer 
 # (ALB) can intelligently route traffic to dozens of different cluster backend services using path-based (/api) or 
-
 # host-based (://domain.com) routing rules.
+
 # 2 - Native AWS Integration: The AWS Load Balancer Controller provisions native 
 # ALBs that route traffic directly to pod IP addresses using standard AWS VPC CNI features, completely bypassing 
 # extra Kubernetes routing hops (NodePorts).

@@ -1,22 +1,63 @@
 name: SonarCloud Scan
+
 on:
   push:
     branches:
-      - main # Change this if your default branch is named 'master'
+      - main 
   pull_request:
     types: [opened, synchronize, reopened]
+
 jobs:
   sonarcloud:
-    name: SonarCloud
+    name: SonarCloud Analysis
     runs-on: ubuntu-latest
     steps:
+      # Step 1: Clone the code onto the temporary runner machine
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
+          fetch-depth: 0 # Mandated by Sonar Source to evaluate historical git-blame metrics
 
-      - name: SonarCloud Scan
+      # ADDED Step 2: Establish Python Runtime environment (DevSecOps Best Practice)
+      # PURPOSE: Seeds Python packages and structural logic libraries 
+      # so Sonar's quality scanners can inspect Python script patterns thoroughly.
+      - name: Setup Python Production Runtime
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip' # Automatically caches package targets to optimize future pipeline run speed
+
+      # Step 3: Run the security validation and code smell scan
+      - name: Execute SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v3.0.0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Automatically provided by GitHub
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # The secret you just added
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Generated natively by GitHub Actions for security
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # Securely mapped out from your repository secrets vault
+        with:
+          # PURPOSE: Ensures the execution engine grabs the 'sonar-project.properties' file from the root
+          projectBaseDir: .
+
+
+
+# name: SonarCloud Scan
+# on:
+#   push:
+#     branches:
+#       - main # Change this if your default branch is named 'master'
+#   pull_request:
+#     types: [opened, synchronize, reopened]
+# jobs:
+#   sonarcloud:
+#     name: SonarCloud
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
+
+#       - name: SonarCloud Scan
+#         uses: SonarSource/sonarcloud-github-action@v3.0.0
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Automatically provided by GitHub
+#           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # The secret you just added

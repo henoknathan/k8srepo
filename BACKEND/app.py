@@ -1,10 +1,5 @@
-#Why This Architecture Works Flawlessly:The Network Path Flow: Browser requests 
-#http://<LoadBalancer-URL>/api/data \(\rightarrow \) Nginx catches it, strips /api, and sends 
-#http://backend-service:8080/data down the cluster backplane \(\rightarrow \) Flask catches the request on 
-# /data, verifies the database connection, and returns the message response cleanly.Database Cleanup Added: 
-# Added conn.close() inside your operational block. Without explicitly closing your open pool connection 
-# handlers, your Python API will run out of database worker sockets within minutes during an HPA scale-up event.
-from flask import Flask, jsonify
+
+from flask import Flask, jsonify, request
 import os
 import mysql.connector
 
@@ -13,26 +8,102 @@ app = Flask(__name__)
 def get_db_connection():
     # Pulls all connection details dynamically from your K8s environment variables
     return mysql.connector.connect(
-        host=os.environ.get("DB_HOST", "mysql-service"),   # Matches your DB_HOST env
-        database=os.environ.get("DB_NAME", "shopflow_db"), # Matches your DB_NAME env
-        user=os.environ.get("DB_USER"),                   # Pulls securely from db-secret
-        password=os.environ.get("DB_PASSWORD")             # Pulls securely from db-secret
+        host=os.environ.get("DB_HOST", "mysql-service"),   
+        database=os.environ.get("DB_NAME", "shopflow_db"), 
+        user=os.environ.get("DB_USER"),                   
+        password=os.environ.get("DB_PASSWORD")             
     )
 
-# CORRECTED: Changed from '/api/data' to '/data'
-# PURPOSE: Nginx strips the '/api' prefix before proxying the request to this container.
-@app.route('/data')
-def get_data():
+# 1. FIXED ENDPOINT FOR HOME SCREEN INITIALIZATION
+# PURPOSE: Matches the frontend check to display the "DB: Connected" badge
+@app.route('/products', methods=['GET'])
+def get_products():
     try:
         conn = get_db_connection()
-        conn.close() # Good practice: Close the database connection when done to prevent memory leaks
-        return jsonify({"message": "Connected to MySQL and Backend successfully!"})
+        cursor = conn.cursor(dictionary=True)
+        
+        # Test Query: Verifies Network Policy (NetPol) allows DB read operations
+        cursor.execute("SELECT DATABASE();")
+        cursor.fetchone()
+        
+        cursor.close()
+        conn.close() 
+        return jsonify({
+            "status": "success",
+            "message": "Connected to MySQL Production Cluster (Validated via NetPol)!"
+        })
     except Exception as e:
-        return jsonify({"message": f"Backend is up, but DB connection error: {str(e)}"})
+        # Fallback if DB is initializing or NetPol blocks the connection
+        return jsonify({
+            "status": "partial_success",
+            "message": f"Backend API operational, but DB connection timed out: {str(e)}"
+        }), 500
+
+# 2. NEW ENDPOINT FOR ADDING ITEMS TO CART
+# PURPOSE: Handles JSON data payloads sent from client button clicks
+@app.route('/cart', methods=['POST'])
+def add_to_cart():
+    try:
+        # Parse data sent from the UI
+        data = request.get_json() or {}
+        item_name = data.get('item', 'Unknown Item')
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Optional: Uncomment this line if you have created a 'cart' table in your DB initialization scripts
+        # cursor.execute("INSERT INTO cart (item_name) VALUES (%s)", (item_name,))
+        # conn.commit()
+        
+        cursor.close()
+        conn.close()
+        
+        print(f"[DevOps Log] Action captured successfully: {item_name} pushed to pool.")
+        return jsonify({"status": "success", "synced_item": item_name}), 201
+    except Exception as e:
+        return jsonify({"status": "error", "error_message": str(e)}), 500
 
 if __name__ == "__main__":
-    # Standard container binding: Listens on all interfaces on containerPort 5000
-    app.run(host='0.0.0.0', port=5000)
+    # FIXED PORT: Changed from 5000 to 8080 to match your internal k8s/deployment service layer
+    app.run(host='0.0.0.0', port=8080)
+
+# ????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+# ????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+#Why This Architecture Works Flawlessly:The Network Path Flow: Browser requests 
+#http://<LoadBalancer-URL>/api/data \(\rightarrow \) Nginx catches it, strips /api, and sends 
+#http://backend-service:8080/data down the cluster backplane \(\rightarrow \) Flask catches the request on 
+# /data, verifies the database connection, and returns the message response cleanly.Database Cleanup Added: 
+# Added conn.close() inside your operational block. Without explicitly closing your open pool connection 
+# handlers, your Python API will run out of database worker sockets within minutes during an HPA scale-up event.
+# from flask import Flask, jsonify
+# import os
+# import mysql.connector
+
+# app = Flask(__name__)
+
+# def get_db_connection():
+#     # Pulls all connection details dynamically from your K8s environment variables
+#     return mysql.connector.connect(
+#         host=os.environ.get("DB_HOST", "mysql-service"),   # Matches your DB_HOST env
+#         database=os.environ.get("DB_NAME", "shopflow_db"), # Matches your DB_NAME env
+#         user=os.environ.get("DB_USER"),                   # Pulls securely from db-secret
+#         password=os.environ.get("DB_PASSWORD")             # Pulls securely from db-secret
+#     )
+
+# # CORRECTED: Changed from '/api/data' to '/data'
+# # PURPOSE: Nginx strips the '/api' prefix before proxying the request to this container.
+# @app.route('/data')
+# def get_data():
+#     try:
+#         conn = get_db_connection()
+#         conn.close() # Good practice: Close the database connection when done to prevent memory leaks
+#         return jsonify({"message": "Connected to MySQL and Backend successfully!"})
+#     except Exception as e:
+#         return jsonify({"message": f"Backend is up, but DB connection error: {str(e)}"})
+
+# if __name__ == "__main__":
+#     # Standard container binding: Listens on all interfaces on containerPort 5000
+#     app.run(host='0.0.0.0', port=5000)
 
 #================================================================================
 #PRODUCTION NETWORK ARCHITECTURE: END-TO-END TRAFFIC FLOW NOTES

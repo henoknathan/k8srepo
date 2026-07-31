@@ -1,3 +1,90 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-autoscaler
+  namespace: lab-shopflow             
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: shopflow-backend            # FIXED: Targets your exact backend deployment name
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  # Metric 1: CPU Utilization
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60       
+  # ADDED Metric 2: Memory Safeguard against Python concurrency memory bloat
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 75        # Triggers a scale up if memory consumption hits 75%
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0   
+      policies:
+      - type: Percent
+        value: 100                    
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300 
+      policies:
+      - type: Percent                 
+        value: 10                     
+        periodSeconds: 60
+
+---
+# ==============================================================================
+# 2. FRONTEND AUTO-SCALING (The HPA Pattern with Anti-Flapping Behavior)
+# ==============================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend-autoscaler
+  namespace: lab-shopflow             
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: shopflow-frontend           # FIXED: Targets your exact frontend deployment name
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  # Metric 1: CPU Utilization
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70       
+  # ADDED Metric 2: Memory Safeguard for Nginx connections
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80        
+  behavior: 
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300 
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+
+
 
 # ==============================================================================
 # 1. BACKEND AUTO-SCALING (The HPA Pattern with Anti-Flapping Behavior)
@@ -14,72 +101,72 @@
 #goal of scaling down gradually by 10% blocks rather than killing 10 random servers in a single wave.
 #Unified Stack File: Added the second HPA block for the frontend layer, ensuring both user-facing tiers 
 #scale elastically under unexpected stress.
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: backend-autoscaler
-  namespace: lab-shopflow             # CORRECTED: Required so the HPA can find your backend deployment
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: backend                     # Targets your exact backend deployment name
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 60       # Scales up if CPU average hits 60%
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 0   # Scale up immediately when traffic spikes to protect the app
-      policies:
-      - type: Percent
-        value: 100                    # Safe calculation rule: Doubles the pod capacity immediately if needed
-        periodSeconds: 15
-    scaleDown:
-      stabilizationWindowSeconds: 300 # ANTI-FLAPPING: Waives deletion for 5 mins to absorb traffic waves
-      policies:
-      - type: Percent                 # CORRECTED: Changed from 'Pods' to 'Percent' for safety
-        value: 10                     # Safely reduces cluster size gradually (max 10% of pods per minute)
-        periodSeconds: 60
----
-# ==============================================================================
-# 2. FRONTEND AUTO-SCALING (The HPA Pattern with Anti-Flapping Behavior)
-# ==============================================================================
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: frontend-autoscaler
-  namespace: lab-shopflow             # CORRECTED: Required so the HPA can find your frontend deployment
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: frontend                    # Targets your exact frontend deployment name
-  minReplicas: 2
-  maxReplicas: 5
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70       # UI static content is lighter; scales up later at 70% CPU load
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 0
-      policies:
-      - type: Percent
-        value: 100
-        periodSeconds: 15
-    scaleDown:
-      stabilizationWindowSeconds: 300 # ANTI-FLAPPING: Holds UI pods active for 5 mins after a spike drops
-      policies:
-      - type: Percent
-        value: 10
-        periodSeconds: 60
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: backend-autoscaler
+#   namespace: lab-shopflow             # CORRECTED: Required so the HPA can find your backend deployment
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: backend                     # Targets your exact backend deployment name
+#   minReplicas: 2
+#   maxReplicas: 10
+#   metrics:
+#   - type: Resource
+#     resource:
+#       name: cpu
+#       target:
+#         type: Utilization
+#         averageUtilization: 60       # Scales up if CPU average hits 60%
+#   behavior:
+#     scaleUp:
+#       stabilizationWindowSeconds: 0   # Scale up immediately when traffic spikes to protect the app
+#       policies:
+#       - type: Percent
+#         value: 100                    # Safe calculation rule: Doubles the pod capacity immediately if needed
+#         periodSeconds: 15
+#     scaleDown:
+#       stabilizationWindowSeconds: 300 # ANTI-FLAPPING: Waives deletion for 5 mins to absorb traffic waves
+#       policies:
+#       - type: Percent                 # CORRECTED: Changed from 'Pods' to 'Percent' for safety
+#         value: 10                     # Safely reduces cluster size gradually (max 10% of pods per minute)
+#         periodSeconds: 60
+# ---
+# # ==============================================================================
+# # 2. FRONTEND AUTO-SCALING (The HPA Pattern with Anti-Flapping Behavior)
+# # ==============================================================================
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
+# metadata:
+#   name: frontend-autoscaler
+#   namespace: lab-shopflow             # CORRECTED: Required so the HPA can find your frontend deployment
+# spec:
+#   scaleTargetRef:
+#     apiVersion: apps/v1
+#     kind: Deployment
+#     name: frontend                    # Targets your exact frontend deployment name
+#   minReplicas: 2
+#   maxReplicas: 5
+#   metrics:
+#   - type: Resource
+#     resource:
+#       name: cpu
+#       target:
+#         type: Utilization
+#         averageUtilization: 70       # UI static content is lighter; scales up later at 70% CPU load
+#   behavior: #Use HPA Behavior Policies.
+#     scaleUp:
+#       stabilizationWindowSeconds: 0
+#       policies:
+#       - type: Percent
+#         value: 100
+#         periodSeconds: 15
+#     scaleDown:
+#       stabilizationWindowSeconds: 300 # ANTI-FLAPPING: Holds UI pods active for 5 mins after a spike drops
+#       policies:
+#       - type: Percent
+#         value: 10
+#         periodSeconds: 60
 

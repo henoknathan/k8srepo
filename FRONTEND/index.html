@@ -1,4 +1,122 @@
 <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopflow Enterprise - Cloud Demo</title>
+    <!-- 1. External CSS: Verifies Nginx Mime-Types & Browser Parsing -->
+    <script src="https://tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans">
+
+    <!-- Global Header -->
+    <header class="bg-blue-600 text-white shadow-md">
+        <div class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold tracking-tight">🛒 Shopflow <span class="text-sm bg-blue-800 px-2 py-1 rounded">EKS Cluster v1.26</span></h1>
+            <div class="flex items-center space-x-4">
+                <span id="db-status" class="text-xs bg-red-500 text-white px-2 py-1 rounded-full font-semibold animate-pulse">DB: Disconnected</span>
+                <div class="relative font-semibold">Cart (<span id="cart-count">0</span>)</div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-6 py-8">
+        <!-- 2. Dynamic Banner representing data flowing from MySQL -->
+        <div class="bg-white border border-gray-200 rounded-xl p-6 mb-8 shadow-sm">
+            <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">System Message Cache (EFS Validated)</h2>
+            <p id="backend-message" class="text-lg text-gray-700 mt-1 italic">Contacting Cluster Gateway...</p>
+        </div>
+
+        <!-- 3. Mock Product Grid (Exercises multiple API routes) -->
+        <h3 class="text-xl font-bold mb-6 text-gray-800">Featured Enterprise Hardware</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            <!-- Product 1 -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                <div class="h-48 bg-gray-200 flex items-center justify-center text-gray-400 font-bold">IMAGE CACHE BLOCK</div>
+                <div class="p-5">
+                    <h4 class="font-bold text-lg text-gray-900">Cloud Node Scaler</h4>
+                    <p class="text-sm text-gray-500 mt-1">High throughput processing unit.</p>
+                    <div class="mt-4 flex justify-between items-center">
+                        <span class="font-extrabold text-blue-600">$299.00</span>
+                        <button onclick="addToCart('Cloud Node')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors">Add to Cart</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Product 2 -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                <div class="h-48 bg-gray-200 flex items-center justify-center text-gray-400 font-bold">IMAGE CACHE BLOCK</div>
+                <div class="p-5">
+                    <h4 class="font-bold text-lg text-gray-900">NetPol Firewall Appliance</h4>
+                    <p class="text-sm text-gray-500 mt-1">Hardened network perimeter defender.</p>
+                    <div class="mt-4 flex justify-between items-center">
+                        <span class="font-extrabold text-blue-600">$499.00</span>
+                        <button onclick="addToCart('Firewall')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors">Add to Cart</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Product 3 -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                <div class="h-48 bg-gray-200 flex items-center justify-center text-gray-400 font-bold">IMAGE CACHE BLOCK</div>
+                <div class="p-5">
+                    <h4 class="font-bold text-lg text-gray-900">EFS Shared Storage Matrix</h4>
+                    <p class="text-sm text-gray-500 mt-1">Multi-AZ block orchestration system.</p>
+                    <div class="mt-4 flex justify-between items-center">
+                        <span class="font-extrabold text-blue-600">$899.00</span>
+                        <button onclick="addToCart('Storage Matrix')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors">Add to Cart</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- 4. Interactive Logic System to test API integration hooks -->
+    <script>
+        let cartItems = 0;
+
+        function addToCart(itemName) {
+            cartItems++;
+            document.getElementById('cart-count').innerText = cartItems;
+            
+            // Simulates writing state back to backend api database
+            fetch('/api/cart', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ item: itemName })
+            })
+            .then(res => console.log(`[DevOps Logs] Item synced to cluster backend database.`))
+            .catch(err => console.error(`[DevOps Error] Could not reach backend: `, err));
+        }
+
+        // Standard Lifecycle Initialization
+        window.addEventListener('DOMContentLoaded', () => {
+            // Test main routing channel
+            fetch('/api/products')
+                .then(response => {
+                    if (!response.ok) throw new Error("Cluster routing failure");
+                    return response.json();
+                })
+                .then(data => {
+                    document.getElementById('backend-message').innerText = data.message || "Connected to Python Core API";
+                    const dbStatus = document.getElementById('db-status');
+                    dbStatus.innerText = "DB: Connected";
+                    dbStatus.classList.remove('bg-red-500');
+                    dbStatus.classList.add('bg-green-500');
+                })
+                .catch(error => {
+                    document.getElementById('backend-message').innerHTML = `<span class="text-red-500 font-semibold">Gateway Error:</span> Verify your Kubernetes Nginx configurations. Network pathway to backend could not resolve.`;
+                    console.error("Error communicating via proxy pass:", error);
+                });
+        });
+    </script>
+</body>
+</html>
+
+
+<!-- <!DOCTYPE html>
 <html>
 <head><title>Enterprise App</title></head>
 <body>
@@ -11,4 +129,4 @@
             .then(data => document.getElementById('backend-data').innerText = data.message);
     </script>
 </body>
-</html>
+</html> -->

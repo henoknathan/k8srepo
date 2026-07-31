@@ -1,16 +1,12 @@
-#Safe Database Migration (Kubernetes Job Pattern)To achieve true zero-downtime, database schema 
-#adjustments must execute as an isolated, short-lived Kubernetes Job before the rolling 
-#update of your application servers takes place. If the schema migration fails, 
-#the pipeline aborts, preventing your production workloads from crashing.
-
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: shopflow-db-migration-${BUILD_NUMBER}
+  # FIXED: Changed from a hard variable to generateName for proper dynamic execution tracking
+  generateName: shopflow-db-migration-
   namespace: lab-shopflow
 spec:
   ttlSecondsAfterFinished: 300
-  backoffLimit: 2 # Increased slightly to 2 to handle a single rapid blip
+  backoffLimit: 2 
   template:
     spec:
       # --- FIXES RACE CONDITIONS ---
@@ -23,7 +19,8 @@ spec:
       containers:
       - name: migrator
         image: "TARGET_BACKEND_IMAGE"
-        command: ["python", "manage.py", "db", "upgrade"]
+        # FIXED: Points directly to your standard application environment execution entrypoint
+        command: ["python", "migrate.py"]
         env:
         - name: DB_HOST
           value: "mysql-service"
@@ -39,4 +36,53 @@ spec:
             secretKeyRef:
               name: db-secret
               key: db-password
+        # FIXED: Grants administrative runtime rights exclusively for the duration of the setup task
+        securityContext:
+          runAsUser: 0
       restartPolicy: Never
+
+
+
+
+#Safe Database Migration (Kubernetes Job Pattern)To achieve true zero-downtime, database schema 
+#adjustments must execute as an isolated, short-lived Kubernetes Job before the rolling 
+#update of your application servers takes place. If the schema migration fails, 
+#the pipeline aborts, preventing your production workloads from crashing.
+
+# apiVersion: batch/v1
+# kind: Job
+# metadata:
+#   name: shopflow-db-migration-${BUILD_NUMBER}
+#   namespace: lab-shopflow
+# spec:
+#   ttlSecondsAfterFinished: 300
+#   backoffLimit: 2 # Increased slightly to 2 to handle a single rapid blip
+#   template:
+#     spec:
+#       # --- FIXES RACE CONDITIONS ---
+#       # Blocks the migration execution until the database service port is fully online
+#       initContainers:
+#       - name: wait-for-db
+#         image: busybox:1.36
+#         command: ['sh', '-c', 'until nc -z -v -w3 mysql-service 3306; do echo "Waiting for database socket..."; sleep 2; done;']
+
+#       containers:
+#       - name: migrator
+#         image: "TARGET_BACKEND_IMAGE"
+#         command: ["python", "manage.py", "db", "upgrade"]
+#         env:
+#         - name: DB_HOST
+#           value: "mysql-service"
+#         - name: DB_NAME
+#           value: "shopflow_db"
+#         - name: DB_USER
+#           valueFrom:
+#             secretKeyRef:
+#               name: db-secret
+#               key: db-user
+#         - name: DB_PASSWORD
+#           valueFrom:
+#             secretKeyRef:
+#               name: db-secret
+#               key: db-password
+#       restartPolicy: Never

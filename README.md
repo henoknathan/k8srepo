@@ -4,7 +4,7 @@ An enterprise-grade, GitOps-driven deployment framework featuring microservice o
 
 ---
 
-##  Repository Structure
+## Repository Structure
 
 ```text
 Shopflow-Enterprise-Workspace/
@@ -150,3 +150,4 @@ Retrieve the production application endpoint routed through your Application Loa
 ```bash
 kubectl get ingress -n lab-shopflow
 ```
+

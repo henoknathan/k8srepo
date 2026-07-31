@@ -60,7 +60,7 @@ Architectural Topology Blueprint:
  DevSecOps & Observability: SonarCloud SAST, Kubernetes Network Policies, Prometheus Time-Series Database (TSDB), Grafana Unified Analytics, and Alertmanager Slack integrations.
 
 Repository Directory Matrix
-
+```
 📁 Shopflow-Enterprise-Workspace/
 │
 ├── 📁 .github/workflows/          # GitHub Enterprise Automation Pipelines
@@ -96,7 +96,7 @@ Repository Directory Matrix
 ├── alertmanager-values.yaml       # Escaped notification routing manifests with Slack webhooks
 ├── sonar-project.properties       # Multi-language coverage filtering exclusions manifest
 └── Jenkinsfile                    # Unified concurrent orchestration CI build automation script
-
+```
 Hardened DevSecOps Production Security Configurations
 
 This project completely isolates application processing nodes by discarding standard generic configurations in favor of hardened production designs:

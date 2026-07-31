@@ -37,27 +37,3 @@ jobs:
           # PURPOSE: Ensures the execution engine grabs the 'sonar-project.properties' file from the root
           projectBaseDir: .
 
-
-
-# name: SonarCloud Scan
-# on:
-#   push:
-#     branches:
-#       - main # Change this if your default branch is named 'master'
-#   pull_request:
-#     types: [opened, synchronize, reopened]
-# jobs:
-#   sonarcloud:
-#     name: SonarCloud
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Checkout Code
-#         uses: actions/checkout@v4
-#         with:
-#           fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
-
-#       - name: SonarCloud Scan
-#         uses: SonarSource/sonarcloud-github-action@v3.0.0
-#         env:
-#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Automatically provided by GitHub
-#           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # The secret you just added

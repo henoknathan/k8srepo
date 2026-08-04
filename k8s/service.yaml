@@ -1,16 +1,3 @@
-# 🎯 Network Traffic Verification Checklist
-
-# With this final configuration file corrected, your cluster networking 
-# maps out perfectly:Public Internet 
-# ➡️ AWS ALB Ingress (Processes HTTPS on 443, drops insecure port 80).
-# AWS ALB 
-# ➡️ shopflow-frontend-svc (Hits ClusterIP Port 80, forwards to Nginx container port 80).
-# Nginx Proxy 
-# ➡️ backend-service (Strips /api, routes to backend ClusterIP Port 8080, lands on Gunicorn container 
-# port 8080).Gunicorn App 
-# ➡️ mysql-service (Hits database ClusterIP Port 3306, fully insulated by your zero-trust 
-# network firewall rules).
-
 # ==============================================================================
 # 1. FRONTEND SERVICE (Web Traffic Routing Layer)
 # ==============================================================================
@@ -66,81 +53,6 @@ spec:
       targetPort: 3306          
 
 
-
-
-#Critical Architectural Changes Implemented:The Port 8080/5000 Bridge: Setting the backend service port to 
-#8080 while leaving the container targetPort at 5000 is an enterprise security best practice. 
-#It abstractly changes the external port signature and ensures your frontend proxy traffic meets your 
-#application container right where it expects it.Strict Namespace Enclosure: 
-#Hardcoding the metadata namespace locks down your network discovery paths. It allows components to interact 
-#via clean local DNS shortcodes (like http://backend-service:8080) without leaking traffic bounds.
-#Since you previously mentioned that your frontend and backend configurations are stored together, 
-#you can save this manifest as a separate file named k8s/service.yaml, or you can copy and append these 
-#blocks directly into your unified k8s/deployment.yaml file.
-# ==============================================================================
-# 1. FRONTEND SERVICE (External Traffic Entry Point Router)
-# ==============================================================================
-# apiVersion: v1
-# kind: Service
-# metadata:
-#   name: frontend-service
-#   namespace: lab-shopflow       # CORRECTED: Tied to your project namespace so it can locate frontend pods
-# spec:
-#   type: LoadBalancer            # Triggers AWS EKS to automatically provision an internet-facing Classic/Network Load Balancer (ELB)
-#   selector:
-#     app: frontend               # Links this routing layer to pods matching the 'app: frontend' label
-#   ports:
-#     - protocol: TCP
-#       port: 80                  # The public-facing port exposed to internet users hitting your domain
-#       targetPort: 80            # Maps public HTTP traffic straight down to port 80 of your Nginx container instances
-# ---
-# # ==============================================================================
-# # 2. BACKEND SERVICE (Internal Private API Router)
-# # ==============================================================================
-# apiVersion: v1
-# kind: Service
-# metadata:
-#   name: backend-service
-#   namespace: lab-shopflow       # CORRECTED: Placed in the safe workspace to isolate app network traffic
-# spec:
-#   type: ClusterIP               # Keeps the service private; visible only to other pods inside this EKS cluster backplane
-#   selector:
-#     app: backend                # Links this routing layer to pods matching the 'app: backend' label
-#   ports:
-#     - protocol: TCP
-#       port: 8080                # CORRECTED: Set to 8080 to match your Nginx upstream configuration and avoid 502 errors
-#       targetPort: 5000          # Bridges the traffic down to the internal port 5000 that your Flask container listens on
-# ---
-# # ==============================================================================
-# # 3. MYSQL SERVICE (Private Database Core Entrypoint)
-# # ==============================================================================
-# apiVersion: v1
-# kind: Service
-# metadata:
-#   name: mysql-service           # CORRECTED: Renamed to match the DB_HOST variable used by your backend and migration job
-#   namespace: lab-shopflow       # CORRECTED: Ensures the database is discoverable inside the correct workspace boundary
-# spec:
-#   type: ClusterIP               # Strongly isolates your database core away from public internet routing
-#   selector:
-#     app: mysql                  # Links this routing layer directly to your single-replica MySQL storage pods
-#   ports:
-#     - protocol: TCP
-#       port: 3306                # Standard database network socket communication port
-#       targetPort: 3306          # Forwards queries directly to port 3306 inside the MySQL container
-
-# Why This Architecture Works PerfectlyPorts Match Up Exactly: 
-# 1 - Ports Match Up Exactly: Your backend-service listens on port 8080, which perfectly satisfies the upstream string you defined in your Nginx configuration (backend-service.lab-shopflow.svc.cluster.local:8080).
-# 2 - Proper Isolation Boundaries: Both the backend and database services are marked as ClusterIP. They have no public IP addresses, protecting your business logic and storage data from direct internet attacks.
-# 3 - Target Port Bridging: Your backend service accepts traffic on port 8080 but safely maps it down to targetPort: 5000, matching standard configurations for Python Flask/FastAPI containers.
-
-# "Using type: LoadBalancer directly on a Kubernetes Service is a great way to quickly expose an application during
-# a proof-of-concept, but it presents major architectural and cost inefficiencies in a production enterprise scale-out.
-# By default in AWS, this triggers the legacy Cloud Provider to spin up an individual Classic Load Balancer (CLB) or a 
-# Network Load Balancer (NLB). If our infrastructure grows to have 10 different frontend applications or microservices 
-# exposed to the internet, this approach forces AWS to provision 10 individual load balancers, resulting in high unnecessary 
-# costs and fragmented DNS management.To solve this in a production-ready AWS landing zone, I would change the service type 
-# to ClusterIP and deploy the AWS Load Balancer Controller to manage traffic via a centralized Kubernetes Ingress 
-# object."
 
 # [Internet Traffic]
 #         │

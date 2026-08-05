@@ -1,12 +1,3 @@
-
-#EXPOSE 8080 (Network Alignment): Your original line referenced port 5000 because 
-# that was what Flask defaulted to. Since the updated app.py script now explicitly runs on port=8080 to sync with 
-# your Nginx upstream proxy config, updating this documentation line ensures clarity for anyone inspecting the 
-# image or reading your manifests.
-#chown -R 10001:10001 /app (Filesystem Permission Fix): 
-# When Docker runs COPY . ., it transfers files from your machine into the container as the default root user. 
-# If you immediately switch to USER 10001, your Python runtime might crash or throw permission errors if it tries 
-# to write temporary log tracks inside /app. Running a quick chown right before changing users resolves this.
 FROM python:3.11-slim AS builder
 
 # PURPOSE: Sets the working directory inside the build stage.

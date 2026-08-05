@@ -22,7 +22,7 @@ alertmanager:
         channel: '#devops-alerts'
         send_resolved: true
         # FIXED: Escaped template formatting parameters to prevent Helm syntax compilation collisions
-        title: '针对 [{{ .Status | toUpper }}] - EKS Cluster Alert: {{ .CommonLabels.alertname }}'
+        title: '[{{ .Status | toUpper }}] - EKS Cluster Alert: {{ .CommonLabels.alertname }}'
         text: >-
           *Description:* {{ .CommonAnnotations.description }}
           *Severity:* `{{ .CommonLabels.severity }}`

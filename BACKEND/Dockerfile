@@ -18,8 +18,6 @@ COPY requirements.txt .
 # '--no-cache-dir' blocks pip from storing temporary zip download files, saving build disk space.
 RUN pip install --user --no-cache-dir -r requirements.txt
 
-# Phase 2: The Hardened Production Runtime Layer
-# Stage 2: Minimalist and Secure Production Runtime
 # PURPOSE: Discards heavy compilers (like gcc) and builds a clean, lightweight app image.
 # DETAIL: Re-initiates 'python:3.11-slim' to drop all Phase 1 operating system bloat.
 FROM python:3.11-slim

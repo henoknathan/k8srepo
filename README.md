@@ -22,6 +22,7 @@ Shopflow-Enterprise-Workspace/
 │   ├── hpa.yaml               # Dual metric (CPU/Memory) Horizontal Pod Autoscaling Behavior
 │   ├── network-policy.yaml    # Layer-3/4 Zero-Trust network segment isolation firewall
 │   └── ingress.yaml           # Enterprise Application Load Balancer routing profile
+│   └── monitoring-values.yaml
 ├── terraform/                 # Automated Cloud Infrastructure Matrix
 │   ├── provider.tf            # AWS provider constraints and remote state hooks
 │   ├── main.tf                # Complete definition of AWS EKS, VPC, EFS, and ECR arrays
@@ -133,6 +134,19 @@ kubectl apply -f k8s/frontend-deployment.yaml
 kubectl apply -f k8s/network-policy.yaml
 kubectl apply -f k8s/hpa.yaml
 kubectl apply -f k8s/ingress.yaml
+```
+### Step 6: Deploy Enterprise Prometheus & Grafana Monitoring Stack
+Initialize the observability infrastructure using Helm while binding your persistent storage layers:
+
+```bash
+# Add the official community Helm repository
+helm repo add prometheus-community https://github.io
+helm repo update
+
+# Install the stack into your isolated project namespace
+helm upgrade --install kube-monitoring prometheus-community/kube-prometheus-stack \
+  --namespace lab-shopflow \
+  -f k8s/monitoring-values.yaml
 ```
 
 ---

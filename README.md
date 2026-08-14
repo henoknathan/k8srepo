@@ -145,6 +145,49 @@ Monitor your fresh deployment loop inside the target network bounds:
 kubectl get pods -n lab-shopflow -w
 ```
 
+## 🛠️ Deployment Troubleshooting Checklist
+
+Use this step-by-step diagnostic framework if components fail to transition to the `Running` state or if application components experience traffic-routing failures.
+
+### 1. Pods Stuck in `Pending` State
+If any microservice or database pod stays `Pending`, the cluster cannot assign or schedule it to a worker node.
+
+* [ ] **Inspect Scheduling Failures**: Run `kubectl describe pod <pod-name> -n lab-shopflow` and check the **Events** block at the bottom.
+* [ ] **Verify EFS PersistentVolumeClaim Binding**: 
+  * Run `kubectl get pvc -n lab-shopflow`. 
+  * If `shared-storage` is `Pending`, ensure your AWS EFS CSI Driver is installed in the EKS cluster via Terraform.
+* [ ] **Check Node Capacity**: Ensure your EKS node group has enough unallocated CPU/Memory to satisfy the resource requests defined in your manifests.
+
+### 2. Pods Stuck in `CrashLoopBackOff`
+If pods start but instantly crash, the problem lies within application logic, environment initializations, or missing parameters.
+
+* [ ] **Check Application Runtime Logs**: Run `kubectl logs <pod-name> -n lab-shopflow --previous` to inspect the exit code and error trace of the crashed process.
+    
+* [ ] **Validate Database Credentials**: Ensure the configuration fields in `k8s/secret-store.yaml` are correctly base64-encoded and precisely match your MySQL deployment variables.
+* [ ] **Verify Python Library Bindings**: If `backend-deployment` crashes, verify that `requirements.txt` matches all modules executed inside `app.py`.
+
+### 3. MySQL StatefulSet Connectivity & Schema Migration Failures
+Common bottlenecks during the database provisioning loop and TCP socket mapping.
+
+* [ ] **Inspect Volume Mount Permissions**: Check `kubectl logs mysql-0 -n lab-shopflow`. If you see permission errors, ensure your AWS EFS filesystem is mounted with correct POSIX security settings.
+* [ ] **Verify `migration-job` Completion**: 
+  * The Python backend requires the database schema to exist before handling client operations.
+  * Run `kubectl get jobs -n lab-shopflow`. Ensure `migration-job` shows `1/1 SUCCESSFUL`.
+* [ ] **Validate CoreDNS Name Resolution**: 
+  * If `migrate.py` or `app.py` cannot locate the database host, verify your connection string.
+  * The default target inside the cluster should be structural: `mysql.lab-shopflow.svc.cluster.local`.
+
+### 4. Zero-Trust Network & Ingress Routing Errors
+Issues relating to `502 Bad Gateway`, `504 Gateway Timeout`, or total packet drops.
+
+* [ ] **Verify Network Isolation Boundaries**: 
+  * `k8s/network-policy.yaml` explicitly enforces zero-trust rules.
+  * Confirm that the ingress rules specifically permit traffic originating from the Nginx edge namespace/label into the Gunicorn Python API pod ports.
+* [ ] **Check Application Port Mapping**: 
+  * Ensure `nginx.conf` passes internal proxy traffic to the exact TCP target port configured on `backend-deployment.yaml` (typically port `8000` for Gunicorn).
+* [ ] **Inspect AWS ALB Ingress Controller Logs**: If the external endpoint does not generate or returns broad connectivity errors, check the logs of your AWS Load Balancer Controller deployment inside your cluster management namespace.
+
+
 Retrieve the production application endpoint routed through your Application Load Balancer mapping layer:
 
 ```bash

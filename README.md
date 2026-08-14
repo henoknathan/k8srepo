@@ -151,7 +151,7 @@ helm upgrade --install kube-monitoring prometheus-community/kube-prometheus-stac
 
 ---
 
-##  Verification & Health Checking
+###  Verification & Health Checking
 
 Monitor your fresh deployment loop inside the target network bounds:
 
